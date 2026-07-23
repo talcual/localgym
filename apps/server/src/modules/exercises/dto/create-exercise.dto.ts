@@ -6,14 +6,14 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { ExerciseType } from '../exercise-type.enum';
+import { EXERCISE_TYPES, ExerciseType } from '../../../database/types';
 
 export class CreateExerciseDto {
   @IsString()
   @MinLength(1)
   name: string;
 
-  @IsEnum(ExerciseType)
+  @IsEnum(EXERCISE_TYPES)
   type: ExerciseType;
 
   @IsInt()

@@ -1,19 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import * as fs from 'fs';
-import * as path from 'path';
-
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const useTurso =
     Boolean(process.env.TURSO_DATABASE_URL) &&
     Boolean(process.env.TURSO_AUTH_TOKEN);
-
-  if (!useTurso) {
-    const dataDir = path.resolve(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-  }
 
   const app = await NestFactory.create(AppModule);
 
