@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+const envUrl = import.meta.env.VITE_API_URL as string | undefined;
+const isBrowser = typeof window !== 'undefined';
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: envUrl && envUrl.length > 0 ? envUrl : '/api',
 });
 
 let token: string | null = null;
@@ -13,7 +16,8 @@ export function setAuthToken(value: string | null) {
 }
 
 export function loadAuthToken(): string | null {
-  const stored = localStorage.getItem('localgym_token');
+  const stored =
+    isBrowser ? localStorage.getItem('localgym_token') : null;
   if (stored) token = stored;
   return token;
 }
@@ -31,7 +35,7 @@ api.interceptors.response.use(
   (error) => {
     if (error?.response?.status === 401) {
       setAuthToken(null);
-      if (!location.pathname.startsWith('/login')) {
+      if (isBrowser && !location.pathname.startsWith('/login')) {
         location.href = '/login';
       }
     }
