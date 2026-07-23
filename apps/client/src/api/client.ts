@@ -1,10 +1,11 @@
 import axios from 'axios';
 
 const envUrl = import.meta.env.VITE_API_URL as string | undefined;
+const envPrefix = (import.meta.env.VITE_API_PREFIX as string | undefined) || '/api';
 const isBrowser = typeof window !== 'undefined';
 
 export const api = axios.create({
-  baseURL: envUrl && envUrl.length > 0 ? envUrl : '/api',
+  baseURL: envUrl && envUrl.length > 0 ? envUrl : envPrefix,
 });
 
 let token: string | null = null;
