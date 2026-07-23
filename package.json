@@ -1,0 +1,16 @@
+{
+  "name": "localgym",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tracking de ejercicios corporales - NestJS + PWA",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run start:dev -w apps/server",
+    "dev:client": "npm run dev -w apps/client",
+    "build:server": "npm run build -w apps/server",
+    "build:client": "npm run build -w apps/client",
+    "build": "npm run build:server && npm run build:client"
+  }
+}
