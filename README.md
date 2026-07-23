@@ -1,5 +1,6 @@
-# localgym
+# Local GYM
 
+Una plataforma para gestionar ejercicios en casa o en el gym.
 Tracking de ejercicios corporales. Backend NestJS con SQLite + cliente Vite/React/Tailwind como PWA.
 
 ## Estructura
