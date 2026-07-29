@@ -60,3 +60,16 @@ export interface AuthResponse {
   access_token: string;
   user: AuthUser;
 }
+
+export interface CatalogExercise {
+  id: string;
+  name: string;
+  type: ExerciseType;
+  sets: number;
+  durationPerSetSec: number | null;
+  repsPerSet: number | null;
+  restSec: number;
+  notes: string | null;
+  category: string | null;
+  createdAt: string;
+}

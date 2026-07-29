@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { exercisesApi } from '../api';
 import { Exercise } from '../api/types';
+import { CatalogBrowser } from '../components/CatalogBrowser';
 
 export function ExercisesList() {
   const navigate = useNavigate();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCatalog, setShowCatalog] = useState(false);
 
   function load() {
     exercisesApi
@@ -29,13 +31,35 @@ export function ExercisesList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Ejercicios</h1>
-        <Link
-          to="/exercises/new"
-          className="bg-brand-600 hover:bg-brand-500 px-3 py-2 rounded-md text-sm"
-        >
-          + Nuevo
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCatalog(!showCatalog)}
+            className="bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-md text-sm"
+          >
+            {showCatalog ? 'Cerrar catálogo' : 'Catálogo'}
+          </button>
+          <Link
+            to="/exercises/new"
+            className="bg-brand-600 hover:bg-brand-500 px-3 py-2 rounded-md text-sm"
+          >
+            + Nuevo
+          </Link>
+        </div>
       </div>
+
+      {showCatalog && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h2 className="text-sm font-semibold text-slate-300 mb-3">
+            Explorar catálogo de ejercicios
+          </h2>
+          <CatalogBrowser
+            onImported={() => {
+              setShowCatalog(false);
+              load();
+            }}
+          />
+        </div>
+      )}
 
       {exercises.length === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">

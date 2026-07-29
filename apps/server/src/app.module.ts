@@ -8,6 +8,7 @@ import { ExercisesModule } from './modules/exercises/exercises.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { SeedModule } from './modules/seed/seed.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SeedModule } from './modules/seed/seed.module';
     SessionsModule,
     StatsModule,
     SeedModule,
+    CatalogModule,
   ],
 })
 export class AppModule {}

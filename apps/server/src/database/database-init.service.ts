@@ -45,6 +45,18 @@ export class DatabaseInitService implements OnModuleInit {
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
           FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
         )`,
+        `CREATE TABLE IF NOT EXISTS exercise_catalog (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'TIME',
+          sets INTEGER NOT NULL DEFAULT 1,
+          duration_per_set_sec INTEGER,
+          reps_per_set INTEGER,
+          rest_sec INTEGER NOT NULL DEFAULT 0,
+          notes TEXT,
+          category TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )`,
         `CREATE INDEX IF NOT EXISTS idx_exercises_user ON exercises(user_id)`,
         `CREATE INDEX IF NOT EXISTS idx_sessions_user ON session_logs(user_id)`,
         `CREATE INDEX IF NOT EXISTS idx_sessions_perf ON session_logs(performed_at)`,

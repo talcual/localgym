@@ -1,6 +1,7 @@
 import { api } from './client';
 import {
   AuthResponse,
+  CatalogExercise,
   DailyCount,
   Exercise,
   ExerciseAggregate,
@@ -38,6 +39,15 @@ export const sessionsApi = {
     notes?: string;
     performedAt?: string;
   }) => api.post<SessionLog>('/sessions', data).then((r) => r.data),
+};
+
+export const catalogApi = {
+  list: (params?: { category?: string; search?: string }) =>
+    api.get<CatalogExercise[]>('/catalog', { params }).then((r) => r.data),
+  categories: () =>
+    api.get<string[]>('/catalog/categories').then((r) => r.data),
+  import: (id: string) =>
+    api.post<Exercise>(`/catalog/${id}/import`).then((r) => r.data),
 };
 
 export const statsApi = {
