@@ -97,7 +97,7 @@ export function SessionHistory() {
             >
               <div className="min-w-0">
                 <div className="font-medium truncate">
-                  {s.exercise?.name ?? 'Ejercicio'}
+                  {s.exercise?.name ?? 'Rutina'}
                 </div>
                 <div className="text-sm text-slate-400">
                   {new Date(s.performedAt).toLocaleString()} ·{' '}

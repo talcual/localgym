@@ -17,7 +17,7 @@ export function ExercisesList() {
   useEffect(load, []);
 
   async function onDelete(id: string) {
-    if (!confirm('¿Eliminar este ejercicio?')) return;
+    if (!confirm('¿Eliminar esta rutina?')) return;
     await exercisesApi.remove(id);
     setExercises((prev) => prev.filter((e) => e.id !== id));
   }
@@ -27,18 +27,18 @@ export function ExercisesList() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Ejercicios</h1>
+        <h1 className="text-2xl font-semibold">Rutinas</h1>
         <Link
           to="/exercises/new"
           className="bg-brand-600 hover:bg-brand-500 px-3 py-2 rounded-md text-sm"
         >
-          + Nuevo
+          + Nueva rutina
         </Link>
       </div>
 
       {exercises.length === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-          Aún no tienes ejercicios.
+          Aún no tienes rutinas.
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">

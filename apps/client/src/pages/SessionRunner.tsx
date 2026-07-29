@@ -30,7 +30,7 @@ export function SessionRunner() {
     exercisesApi
       .get(exerciseId)
       .then(setExercise)
-      .catch(() => setError('No se pudo cargar el ejercicio'))
+      .catch(() => setError('No se pudo cargar la rutina'))
       .finally(() => setLoading(false));
   }, [exerciseId]);
 

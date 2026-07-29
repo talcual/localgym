@@ -47,8 +47,8 @@ export function Dashboard() {
         </h1>
         <p className="text-slate-400">
           {exercises.length === 0
-            ? 'Crea tu primer ejercicio para empezar.'
-            : 'Elige un ejercicio para empezar tu sesión de hoy.'}
+            ? 'Crea tu primera rutina para empezar.'
+            : 'Elige una rutina para empezar tu sesión de hoy.'}
         </p>
       </div>
 
@@ -70,18 +70,18 @@ export function Dashboard() {
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Tus ejercicios</h2>
+          <h2 className="text-lg font-semibold">Tus rutinas</h2>
           <Link
             to="/exercises/new"
             className="text-sm bg-brand-600 hover:bg-brand-500 px-3 py-2 rounded-md"
           >
-            + Nuevo ejercicio
+            + Nueva rutina
           </Link>
         </div>
 
         {exercises.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-            Aún no tienes ejercicios.{' '}
+            Aún no tienes rutinas.{' '}
             <Link to="/exercises/new" className="text-brand-400 hover:underline">
               Crea el primero
             </Link>

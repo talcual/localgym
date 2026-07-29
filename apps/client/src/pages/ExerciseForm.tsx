@@ -31,7 +31,7 @@ export function ExerciseForm() {
         setRestSec(ex.restSec ?? 30);
         setNotes(ex.notes ?? '');
       })
-      .catch(() => setError('No se pudo cargar el ejercicio'));
+      .catch(() => setError('No se pudo cargar la rutina'));
   }, [id]);
 
   async function onSubmit(e: FormEvent) {
@@ -69,7 +69,7 @@ export function ExerciseForm() {
   return (
     <div className="max-w-xl">
       <h1 className="text-2xl font-semibold mb-6">
-        {isEdit ? 'Editar ejercicio' : 'Nuevo ejercicio'}
+        {isEdit ? 'Editar rutina' : 'Nueva rutina'}
       </h1>
       <form onSubmit={onSubmit} className="space-y-4 bg-slate-900 border border-slate-800 rounded-xl p-6">
         <div>
