@@ -6,6 +6,7 @@ import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { ExercisesList } from './pages/ExercisesList';
 import { ExerciseForm } from './pages/ExerciseForm';
+import { Catalog } from './pages/Catalog';
 import { SessionRunner } from './pages/SessionRunner';
 import { SessionHistory } from './pages/SessionHistory';
 import { Stats } from './pages/Stats';
@@ -81,6 +82,16 @@ export function App() {
           <ProtectedRoute>
             <Shell>
               <SessionRunner />
+            </Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/catalog"
+        element={
+          <ProtectedRoute>
+            <Shell>
+              <Catalog />
             </Shell>
           </ProtectedRoute>
         }
