@@ -1,4 +1,4 @@
-# localgym
+# ModoFit
 
 Tracking de ejercicios corporales. Backend NestJS + cliente Vite/React/Tailwind como PWA.
 

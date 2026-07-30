@@ -29,9 +29,9 @@ export function Login() {
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-10 h-10 rounded-lg bg-brand-600 flex items-center justify-center font-bold text-lg">
-            L
+            M
           </div>
-          <h1 className="text-2xl font-semibold">localgym</h1>
+          <h1 className="text-2xl font-semibold">ModoFit</h1>
         </div>
         <h2 className="text-lg font-medium mb-1">Iniciar sesión</h2>
         <p className="text-sm text-slate-400 mb-6">

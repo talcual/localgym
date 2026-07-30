@@ -25,7 +25,7 @@ async function bootstrap() {
   const port = Number(process.env.PORT) || 3000;
   await app.listen(port);
   console.log(
-    `localgym API corriendo en http://localhost:${port}/api (DB: ${
+    `ModoFit API corriendo en http://localhost:${port}/api (DB: ${
       useTurso ? 'Turso/libSQL' : 'SQLite local'
     })`,
   );

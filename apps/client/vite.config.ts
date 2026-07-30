@@ -15,8 +15,8 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg'],
         manifest: {
-          name: 'localgym',
-          short_name: 'localgym',
+          name: 'ModoFit',
+          short_name: 'ModoFit',
           description: 'Tracking de ejercicios corporales',
           theme_color: '#0f172a',
           background_color: '#0f172a',

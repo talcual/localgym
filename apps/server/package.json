@@ -1,8 +1,8 @@
 {
-  "name": "@localgym/server",
+  "name": "@modofit/server",
   "version": "0.1.0",
   "private": true,
-  "description": "API de localgym",
+  "description": "API de ModoFit",
   "scripts": {
     "build": "nest build",
     "start": "nest start",

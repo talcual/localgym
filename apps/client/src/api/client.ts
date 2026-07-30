@@ -12,13 +12,13 @@ let token: string | null = null;
 
 export function setAuthToken(value: string | null) {
   token = value;
-  if (value) localStorage.setItem('localgym_token', value);
-  else localStorage.removeItem('localgym_token');
+  if (value) localStorage.setItem('modofit_token', value);
+  else localStorage.removeItem('modofit_token');
 }
 
 export function loadAuthToken(): string | null {
   const stored =
-    isBrowser ? localStorage.getItem('localgym_token') : null;
+    isBrowser ? localStorage.getItem('modofit_token') : null;
   if (stored) token = stored;
   return token;
 }

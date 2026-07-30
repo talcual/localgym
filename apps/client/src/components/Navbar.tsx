@@ -19,7 +19,7 @@ export function Navbar() {
           <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center font-bold">
              <i className="fa-solid fa-dumbbell text-white"></i> 
           </div>
-          <span className="text-lg font-semibold">Local GYM</span>
+          <span className="text-lg font-semibold">ModoFit</span>
         </div>
         <nav className="hidden sm:flex items-center gap-1">
           <NavLink to="/" end className={linkClass}>
