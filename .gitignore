@@ -36,6 +36,9 @@ data/
 *.sqlite3
 *.db
 
+# Datasets locales (no se versionan)
+exercises.json
+
 # NestJS
 coverage/
 .nyc_output/
