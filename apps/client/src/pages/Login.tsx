@@ -35,7 +35,7 @@ export function Login() {
         </div>
         <h2 className="text-lg font-medium mb-1">Iniciar sesión</h2>
         <p className="text-sm text-slate-400 mb-6">
-          Accede para registrar tus rutinas
+          Accede para registrar tu rutina
         </p>
         <form onSubmit={onSubmit} className="space-y-4">
           <div>

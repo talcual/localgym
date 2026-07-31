@@ -70,7 +70,7 @@ export function Dashboard() {
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Tus rutinas</h2>
+          <h2 className="text-lg font-semibold">Tu rutina</h2>
           <Link
             to="/exercises/new"
             className="text-sm bg-brand-600 hover:bg-brand-500 px-3 py-2 rounded-md"
@@ -81,7 +81,7 @@ export function Dashboard() {
 
         {exercises.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-            Aún no tienes rutinas.{' '}
+            Aún no tienes ninguna rutina.{' '}
             <Link to="/exercises/new" className="text-brand-400 hover:underline">
               Crea el primero
             </Link>

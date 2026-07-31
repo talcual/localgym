@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { exercisesApi, sessionsApi } from '../api';
 import { Exercise } from '../api/types';
 import { formatTimer } from '../utils/time';
 
 type Phase = 'idle' | 'work' | 'rest' | 'done';
+
+interface SetEntry {
+  reps: number | null;
+  done: boolean;
+  skipped: boolean;
+}
 
 export function SessionRunner() {
   const { exerciseId } = useParams();
@@ -19,6 +25,11 @@ export function SessionRunner() {
   const [remaining, setRemaining] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  // Estado para reporte manual set por set (REPS / MIXED).
+  const [manualSets, setManualSets] = useState<SetEntry[]>([]);
+  const [repInput, setRepInput] = useState<string>('');
+  const [mixedRepsTotal, setMixedRepsTotal] = useState<string>('');
+
   const endsAtRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const phaseRef = useRef<Phase>('idle');
@@ -29,7 +40,16 @@ export function SessionRunner() {
     if (!exerciseId) return;
     exercisesApi
       .get(exerciseId)
-      .then(setExercise)
+      .then((ex) => {
+        setExercise(ex);
+        setManualSets(
+          Array.from({ length: ex.sets }, () => ({
+            reps: null,
+            done: false,
+            skipped: false,
+          })),
+        );
+      })
       .catch(() => setError('No se pudo cargar la rutina'))
       .finally(() => setLoading(false));
   }, [exerciseId]);
@@ -62,22 +82,38 @@ export function SessionRunner() {
     }
   }
 
-  function beep() {
+  /**
+   * Beep genérico parametrizable.
+   * `volume` entre 0 y 1. Por defecto volumen bajo (beep entre sets).
+   */
+  function beep(opts: { freq?: number; volume?: number; duration?: number } = {}) {
+    const { freq = 880, volume = 0.3, duration = 0.45 } = opts;
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.frequency.value = 880;
+      osc.frequency.value = freq;
       osc.connect(gain);
       gain.connect(ctx.destination);
       gain.gain.setValueAtTime(0.001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
       osc.start();
-      osc.stop(ctx.currentTime + 0.45);
+      osc.stop(ctx.currentTime + duration + 0.05);
     } catch {
       // ignore
     }
+  }
+
+  /**
+   * Sonido de cierre de sesión: 3 pulsos cortos crecientes, volumen alto.
+   */
+  function playFinishSound() {
+    const seq = [880, 1100, 1320];
+    seq.forEach((f, i) => {
+      setTimeout(() => beep({ freq: f, volume: 0.9, duration: 0.35 }), i * 220);
+    });
+    vibrate([400, 100, 400, 100, 400]);
   }
 
   function vibrate(pattern: number | number[]) {
@@ -99,13 +135,20 @@ export function SessionRunner() {
     if (!exercise) return;
     if (phaseRef.current === 'work') {
       setsCompletedRef.current = setIndexRef.current + 1;
+      if (exercise.type === 'MIXED') {
+        setManualSets((prev) =>
+          prev.map((s, i) =>
+            i === setIndexRef.current ? { ...s, done: true } : s,
+          ),
+        );
+      }
       const isLast = setIndexRef.current + 1 >= exercise.sets;
       if (isLast) {
         finish();
         return;
       }
       if (exercise.restSec > 0) {
-        beep();
+        beep({ volume: 0.35 });
         vibrate([200, 100, 200]);
         startPhase('rest', exercise.restSec);
       } else {
@@ -115,12 +158,22 @@ export function SessionRunner() {
         startPhase('work', dur);
       }
     } else if (phaseRef.current === 'rest') {
-      beep();
+      beep({ volume: 0.35 });
       vibrate(150);
       const next = setIndexRef.current + 1;
       setCurrentSet(next);
-      const dur = exercise.durationPerSetSec ?? 0;
-      startPhase('work', dur);
+      // Si el ejercicio es REPS puro, pasamos a 'work' sin timer para mostrar input.
+      if (exercise.type === 'REPS') {
+        if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+        endsAtRef.current = null;
+        setPhase('work');
+        setRepInput('');
+        setRemaining(0);
+      } else {
+        const dur = exercise.durationPerSetSec ?? 0;
+        startPhase('work', dur);
+      }
     }
   }
 
@@ -128,7 +181,16 @@ export function SessionRunner() {
     if (!exercise) return;
     setCurrentSet(0);
     setsCompletedRef.current = 0;
-    if (exercise.durationPerSetSec) {
+    setRepInput('');
+    setMixedRepsTotal('');
+
+    if (exercise.type === 'REPS') {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      endsAtRef.current = null;
+      setPhase('work');
+      setRemaining(0);
+    } else if (exercise.durationPerSetSec) {
       startPhase('work', exercise.durationPerSetSec);
     } else {
       setsCompletedRef.current = exercise.sets;
@@ -143,10 +205,48 @@ export function SessionRunner() {
     setPhase('idle');
   }
 
+  /**
+   * Confirmar un set manual (REPS / MIXED).
+   * `reps` puede ser null si el usuario solo confirma sin reps.
+   */
+  function confirmSet(reps: number | null) {
+    if (!exercise) return;
+    const idx = setIndexRef.current;
+    setManualSets((prev) =>
+      prev.map((s, i) =>
+        i === idx ? { ...s, reps, done: true, skipped: reps == null } : s,
+      ),
+    );
+    setsCompletedRef.current = idx + 1;
+    const isLast = idx + 1 >= exercise.sets;
+    if (isLast) {
+      finish();
+      return;
+    }
+    if (exercise.restSec > 0) {
+      beep({ volume: 0.4 });
+      startPhase('rest', exercise.restSec);
+    } else {
+      const next = idx + 1;
+      setCurrentSet(next);
+      setRepInput('');
+      if (exercise.type === 'REPS') {
+        if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+        endsAtRef.current = null;
+        setPhase('work');
+      } else {
+        startPhase('work', exercise.durationPerSetSec ?? 0);
+      }
+    }
+  }
+
   function skipSet() {
     if (!exercise) return;
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
+    endsAtRef.current = null;
+
     if (phaseRef.current === 'rest') {
       const next = setIndexRef.current + 1;
       if (next >= exercise.sets) {
@@ -155,20 +255,38 @@ export function SessionRunner() {
         return;
       }
       setCurrentSet(next);
-      startPhase('work', exercise.durationPerSetSec ?? 0);
-    } else {
-      setsCompletedRef.current = setIndexRef.current + 1;
-      if (setsCompletedRef.current >= exercise.sets) {
-        finish();
-        return;
-      }
-      if (exercise.restSec > 0) {
-        startPhase('rest', exercise.restSec);
+      setRepInput('');
+      if (exercise.type === 'REPS') {
+        setPhase('work');
       } else {
-        const next = setIndexRef.current + 1;
-        setCurrentSet(next);
         startPhase('work', exercise.durationPerSetSec ?? 0);
       }
+      return;
+    }
+
+    if (exercise.type === 'REPS') {
+      confirmSet(null);
+      return;
+    }
+
+    setsCompletedRef.current = setIndexRef.current + 1;
+    if (exercise.type === 'MIXED') {
+      setManualSets((prev) =>
+        prev.map((s, i) =>
+          i === setIndexRef.current ? { ...s, done: true, skipped: true } : s,
+        ),
+      );
+    }
+    if (setsCompletedRef.current >= exercise.sets) {
+      finish();
+      return;
+    }
+    if (exercise.restSec > 0) {
+      startPhase('rest', exercise.restSec);
+    } else {
+      const next = setIndexRef.current + 1;
+      setCurrentSet(next);
+      startPhase('work', exercise.durationPerSetSec ?? 0);
     }
   }
 
@@ -183,22 +301,59 @@ export function SessionRunner() {
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
     setPhase('done');
+    playFinishSound();
     setSaving(true);
     try {
       const completed =
         setsCompletedRef.current > 0 ? setsCompletedRef.current : exercise.sets;
+
+      let totalReps = 0;
+      let totalDurationSec = 0;
+
+      if (exercise.type === 'REPS') {
+        totalReps = manualSets.reduce(
+          (acc, s) => acc + (s.reps ?? 0),
+          0,
+        );
+        totalDurationSec = 0;
+      } else if (exercise.type === 'MIXED') {
+        totalDurationSec =
+          (exercise.durationPerSetSec ?? 0) * completed;
+        const fromManual = manualSets.reduce(
+          (acc, s) => acc + (s.reps ?? 0),
+          0,
+        );
+        const fromInput = Number(mixedRepsTotal);
+        totalReps = fromInput > 0 ? fromInput : fromManual;
+      } else {
+        totalDurationSec =
+          (exercise.durationPerSetSec ?? 0) * completed;
+        totalReps = (exercise.repsPerSet ?? 0) * completed;
+      }
+
       await sessionsApi.create({
         exerciseId: exercise.id,
         setsCompleted: completed,
-        totalDurationSec: (exercise.durationPerSetSec ?? 0) * completed,
-        totalReps: (exercise.repsPerSet ?? 0) * completed,
+        totalDurationSec,
+        totalReps,
       });
-      setTimeout(() => navigate('/'), 1200);
+      setTimeout(() => navigate('/'), 1500);
     } catch (err: any) {
       setError('No se pudo guardar la sesión');
     } finally {
       setSaving(false);
     }
+  }
+
+  async function finishMixed() {
+    setManualSets((prev) =>
+      prev.map((s, i) =>
+        i < setsCompletedRef.current && !s.done
+          ? { ...s, done: true, reps: null, skipped: true }
+          : s,
+      ),
+    );
+    await finish();
   }
 
   useEffect(() => {
@@ -209,8 +364,24 @@ export function SessionRunner() {
 
   const totalSetsLabel = useMemo(() => exercise?.sets ?? 0, [exercise]);
 
+  const labelType = (t: string) => {
+    if (t === 'TIME') return 'Por tiempo';
+    if (t === 'REPS') return 'Por repeticiones';
+    return 'Mixto (tiempo + reps)';
+  };
+
   if (loading) return <div className="text-slate-400">Cargando...</div>;
   if (!exercise) return <div className="text-red-400">{error || 'No encontrado'}</div>;
+
+  const isRepsManual = exercise.type === 'REPS';
+  const isMixed = exercise.type === 'MIXED';
+
+  function onRepSubmit(e: FormEvent) {
+    e.preventDefault();
+    const reps = Number(repInput);
+    if (!Number.isFinite(reps) || reps < 0) return;
+    confirmSet(reps);
+  }
 
   return (
     <div className="max-w-md mx-auto">
@@ -221,13 +392,50 @@ export function SessionRunner() {
         {exercise.repsPerSet ? ` · ${exercise.repsPerSet} reps` : ''}
       </p>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 text-center">
         {phase === 'idle' && (
           <>
-            <div className="text-slate-400 text-sm uppercase tracking-wide">
-              Listo para empezar
+            <div className="text-slate-400 text-xs uppercase tracking-wide mb-3">
+              Resumen de la rutina
             </div>
-            <div className="text-6xl font-bold my-6">00:00</div>
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-left mb-4">
+              <div className="grid grid-cols-2 gap-y-2 text-sm">
+                <div className="text-slate-400">Tipo</div>
+                <div className="text-right">{labelType(exercise.type)}</div>
+                <div className="text-slate-400">Juegos</div>
+                <div className="text-right">{exercise.sets}</div>
+                {exercise.durationPerSetSec != null && (
+                  <>
+                    <div className="text-slate-400">Duración / juego</div>
+                    <div className="text-right">{exercise.durationPerSetSec}s</div>
+                  </>
+                )}
+                {exercise.repsPerSet != null && (
+                  <>
+                    <div className="text-slate-400">Reps objetivo / juego</div>
+                    <div className="text-right">{exercise.repsPerSet}</div>
+                  </>
+                )}
+                <div className="text-slate-400">Descanso</div>
+                <div className="text-right">
+                  {exercise.restSec > 0 ? `${exercise.restSec}s` : 'Sin descanso'}
+                </div>
+              </div>
+            </div>
+
+            {exercise.notes && exercise.notes.trim().length > 0 ? (
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-left mb-6 max-h-48 overflow-y-auto">
+                <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">
+                  Descripción
+                </div>
+                <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">
+                  {exercise.notes}
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 mb-4">Sin descripción.</p>
+            )}
+
             <button
               onClick={start}
               className="w-full bg-brand-600 hover:bg-brand-500 transition rounded-xl py-3 font-medium text-lg"
@@ -237,7 +445,53 @@ export function SessionRunner() {
           </>
         )}
 
-        {phase === 'work' && (
+        {phase === 'work' && isRepsManual && (
+          <>
+            <div className="text-emerald-400 text-sm uppercase tracking-wide font-semibold">
+              Trabajo · juego {currentSet + 1} / {totalSetsLabel}
+            </div>
+            <form onSubmit={onRepSubmit} className="my-6">
+              <label className="block text-slate-400 text-xs uppercase tracking-wide mb-2">
+                Repeticiones realizadas
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                autoFocus
+                value={repInput}
+                onChange={(e) => setRepInput(e.target.value)}
+                placeholder="0"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-4 text-center text-5xl font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <div className="flex gap-2 mt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-brand-600 hover:bg-brand-500 rounded-xl py-3 font-medium"
+                >
+                  Completado
+                </button>
+                <button
+                  type="button"
+                  onClick={skipSet}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 rounded-xl py-3"
+                >
+                  Omitir
+                </button>
+              </div>
+            </form>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={pause}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 rounded-xl py-2 text-sm"
+              >
+                Pausar
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === 'work' && !isRepsManual && (
           <>
             <div className="text-emerald-400 text-sm uppercase tracking-wide font-semibold">
               Trabajo · juego {currentSet + 1} / {totalSetsLabel}
@@ -291,7 +545,45 @@ export function SessionRunner() {
           </>
         )}
 
-        {phase === 'done' && (
+        {phase === 'done' && isMixed && !saving && (
+          <>
+            <div className="text-emerald-400 text-sm uppercase tracking-wide font-semibold">
+              ¡Sesión completa!
+            </div>
+            <p className="text-slate-300 mt-4 mb-2 text-sm">
+              ¿Cuántas repeticiones totales hiciste?
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                finishMixed();
+              }}
+              className="my-4"
+            >
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                autoFocus
+                value={mixedRepsTotal}
+                onChange={(e) => setMixedRepsTotal(e.target.value)}
+                placeholder="0"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-center text-4xl font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              <button
+                type="submit"
+                className="w-full mt-4 bg-brand-600 hover:bg-brand-500 rounded-xl py-3 font-medium"
+              >
+                Guardar sesión
+              </button>
+            </form>
+            <div className="text-xs text-slate-500 mt-2">
+              Volviendo al inicio si no confirmas.
+            </div>
+          </>
+        )}
+
+        {phase === 'done' && !(isMixed && !saving) && (
           <>
             <div className="text-emerald-400 text-sm uppercase tracking-wide font-semibold">
               ¡Sesión completa!

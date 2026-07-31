@@ -26,7 +26,7 @@ export function Navbar() {
             Inicio
           </NavLink>
           <NavLink to="/exercises" className={linkClass}>
-            Rutinas
+            Rutina
           </NavLink>
           <NavLink to="/catalog" className={linkClass}>
             Catálogo
@@ -58,7 +58,7 @@ export function Navbar() {
           Inicio
         </NavLink>
         <NavLink to="/exercises" className={linkClass}>
-          Rutinas
+          Rutina
         </NavLink>
         <NavLink to="/catalog" className={linkClass}>
           Catálogo

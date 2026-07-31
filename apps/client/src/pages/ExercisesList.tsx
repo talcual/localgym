@@ -27,7 +27,7 @@ export function ExercisesList() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Rutinas</h1>
+        <h1 className="text-2xl font-semibold">Rutina</h1>
         <Link
           to="/exercises/new"
           className="bg-brand-600 hover:bg-brand-500 px-3 py-2 rounded-md text-sm"
@@ -38,7 +38,7 @@ export function ExercisesList() {
 
       {exercises.length === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-          Aún no tienes rutinas.
+          Aún no tienes ninguna rutina.
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
