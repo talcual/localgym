@@ -22,7 +22,7 @@ export function Navbar() {
           <span className="text-lg font-semibold">ModoFit</span>
         </div>
         <nav className="hidden sm:flex items-center gap-1">
-          <NavLink to="/" end className={linkClass}>
+          <NavLink to="/app" end className={linkClass}>
             Inicio
           </NavLink>
           <NavLink to="/exercises" className={linkClass}>
@@ -54,7 +54,7 @@ export function Navbar() {
         </div>
       </div>
       <nav className="sm:hidden flex items-center gap-1 px-2 pb-2 overflow-x-auto">
-        <NavLink to="/" end className={linkClass}>
+        <NavLink to="/app" end className={linkClass}>
           Inicio
         </NavLink>
         <NavLink to="/exercises" className={linkClass}>
