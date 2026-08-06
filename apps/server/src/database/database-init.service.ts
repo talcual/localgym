@@ -2,6 +2,22 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Client } from '@libsql/client';
 import { DATABASE } from './database.tokens';
 
+interface ColumnSpec {
+  name: string;
+  type: string;
+}
+
+const SCHEMA: Array<{ table: string; columns: ColumnSpec[] }> = [
+  {
+    table: 'users',
+    columns: [
+      { name: 'height_cm', type: 'REAL' },
+      { name: 'sex', type: 'TEXT' },
+      { name: 'birthdate', type: 'TEXT' },
+    ],
+  },
+];
+
 @Injectable()
 export class DatabaseInitService implements OnModuleInit {
   private readonly logger = new Logger(DatabaseInitService.name);
@@ -99,6 +115,38 @@ export class DatabaseInitService implements OnModuleInit {
       ],
       'write',
     );
+
+    await this.migrateColumns();
+
     this.logger.log('Esquema de base de datos inicializado.');
+  }
+
+  private async migrateColumns() {
+    for (const { table, columns } of SCHEMA) {
+      const existing = await this.getExistingColumns(table);
+      const missing = columns.filter((c) => !existing.has(c.name));
+      for (const col of missing) {
+        const sql = `ALTER TABLE ${table} ADD COLUMN ${col.name} ${col.type}`;
+        try {
+          await this.db.execute({ sql, args: [] });
+          this.logger.log(
+            `Migración: ${table}.${col.name} (${col.type}) agregada.`,
+          );
+        } catch (err) {
+          const msg = (err as Error)?.message ?? String(err);
+          this.logger.warn(
+            `Migración: no se pudo agregar ${table}.${col.name}: ${msg}`,
+          );
+        }
+      }
+    }
+  }
+
+  private async getExistingColumns(table: string): Promise<Set<string>> {
+    const res = await this.db.execute({
+      sql: `SELECT name FROM PRAGMA_TABLE_INFO('${table}')`,
+      args: [],
+    });
+    return new Set(res.rows.map((r: any) => String(r.name)));
   }
 }
