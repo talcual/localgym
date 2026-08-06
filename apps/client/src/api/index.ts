@@ -1,12 +1,17 @@
 import { api } from './client';
 import {
   AuthResponse,
+  BodyMeasurement,
+  BmiHistoryPoint,
   CatalogExercise,
   DailyCount,
   Exercise,
   ExerciseAggregate,
+  ProgressSummary,
   SessionLog,
   SummaryStats,
+  UserProfile,
+  WeightEntry,
 } from './types';
 
 export const authApi = {
@@ -15,6 +20,12 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { email, password }).then((r) => r.data),
   me: () => api.get('/auth/me').then((r) => r.data),
+};
+
+export const usersApi = {
+  me: () => api.get<UserProfile>('/users/me').then((r) => r.data),
+  update: (data: Partial<Pick<UserProfile, 'displayName' | 'heightCm' | 'sex' | 'birthdate'>>) =>
+    api.patch<UserProfile>('/users/me', data).then((r) => r.data),
 };
 
 export const exercisesApi = {
@@ -56,4 +67,25 @@ export const statsApi = {
     api.get<DailyCount[]>('/stats/by-day', { params: { days } }).then((r) => r.data),
   byExercise: () =>
     api.get<ExerciseAggregate[]>('/stats/by-exercise').then((r) => r.data),
+};
+
+export const weightApi = {
+  list: () => api.get<WeightEntry[]>('/weight').then((r) => r.data),
+  latest: () => api.get<WeightEntry | null>('/weight/latest').then((r) => r.data),
+  create: (data: { weightKg: number; recordedAt?: string; note?: string }) =>
+    api.post<WeightEntry>('/weight', data).then((r) => r.data),
+  remove: (id: string) => api.delete(`/weight/${id}`).then((r) => r.data),
+};
+
+export const measurementsApi = {
+  list: () => api.get<BodyMeasurement[]>('/measurements').then((r) => r.data),
+  latest: () => api.get<BodyMeasurement | null>('/measurements/latest').then((r) => r.data),
+  create: (data: Partial<Omit<BodyMeasurement, 'id' | 'userId' | 'recordedAt' | 'createdAt'>> & { recordedAt?: string }) =>
+    api.post<BodyMeasurement>('/measurements', data).then((r) => r.data),
+  remove: (id: string) => api.delete(`/measurements/${id}`).then((r) => r.data),
+};
+
+export const progressApi = {
+  summary: () => api.get<ProgressSummary>('/progress/summary').then((r) => r.data),
+  bmiHistory: () => api.get<BmiHistoryPoint[]>('/progress/bmi-history').then((r) => r.data),
 };

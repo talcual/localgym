@@ -9,6 +9,9 @@ import { SessionsModule } from './modules/sessions/sessions.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { SeedModule } from './modules/seed/seed.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { WeightModule } from './modules/weight/weight.module';
+import { MeasurementsModule } from './modules/measurements/measurements.module';
+import { ProgressModule } from './modules/progress/progress.module';
 
 @Module({
   imports: [
@@ -21,6 +24,9 @@ import { CatalogModule } from './modules/catalog/catalog.module';
     StatsModule,
     SeedModule,
     CatalogModule,
+    WeightModule,
+    MeasurementsModule,
+    ProgressModule,
   ],
 })
 export class AppModule {}

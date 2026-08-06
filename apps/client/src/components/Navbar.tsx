@@ -34,11 +34,21 @@ export function Navbar() {
           <NavLink to="/sessions" className={linkClass}>
             Historial
           </NavLink>
+          <NavLink to="/progress" className={linkClass}>
+            Progreso
+          </NavLink>
           <NavLink to="/stats" className={linkClass}>
             Stats
           </NavLink>
         </nav>
         <div className="flex items-center gap-3">
+          <NavLink
+            to="/profile"
+            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-sm"
+            title="Perfil"
+          >
+            <i className="fa-solid fa-user text-slate-300"></i>
+          </NavLink>
           <span className="hidden sm:inline text-sm text-slate-400">
             {user?.displayName}
           </span>
@@ -66,8 +76,14 @@ export function Navbar() {
         <NavLink to="/sessions" className={linkClass}>
           Historial
         </NavLink>
+        <NavLink to="/progress" className={linkClass}>
+          Progreso
+        </NavLink>
         <NavLink to="/stats" className={linkClass}>
           Stats
+        </NavLink>
+        <NavLink to="/profile" className={linkClass}>
+          Perfil
         </NavLink>
       </nav>
     </header>

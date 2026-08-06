@@ -16,6 +16,9 @@ export class DatabaseInitService implements OnModuleInit {
           email TEXT NOT NULL UNIQUE,
           password_hash TEXT NOT NULL,
           display_name TEXT NOT NULL,
+          height_cm REAL,
+          sex TEXT,
+          birthdate TEXT,
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )`,
         `CREATE TABLE IF NOT EXISTS exercises (
@@ -57,9 +60,42 @@ export class DatabaseInitService implements OnModuleInit {
           category TEXT,
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )`,
+        `CREATE TABLE IF NOT EXISTS weight_entries (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          weight_kg REAL NOT NULL,
+          recorded_at TEXT NOT NULL,
+          note TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        `CREATE TABLE IF NOT EXISTS body_measurements (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          recorded_at TEXT NOT NULL,
+          chest_cm REAL,
+          waist_cm REAL,
+          hips_cm REAL,
+          left_arm_cm REAL,
+          right_arm_cm REAL,
+          left_thigh_cm REAL,
+          right_thigh_cm REAL,
+          left_calf_cm REAL,
+          right_calf_cm REAL,
+          neck_cm REAL,
+          shoulders_cm REAL,
+          body_fat_pct REAL,
+          note TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
         `CREATE INDEX IF NOT EXISTS idx_exercises_user ON exercises(user_id)`,
         `CREATE INDEX IF NOT EXISTS idx_sessions_user ON session_logs(user_id)`,
         `CREATE INDEX IF NOT EXISTS idx_sessions_perf ON session_logs(performed_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_weight_user ON weight_entries(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_weight_recorded ON weight_entries(recorded_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_measurements_user ON body_measurements(user_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_measurements_recorded ON body_measurements(recorded_at)`,
       ],
       'write',
     );

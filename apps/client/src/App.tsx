@@ -11,6 +11,10 @@ import { Catalog } from './pages/Catalog';
 import { SessionRunner } from './pages/SessionRunner';
 import { SessionHistory } from './pages/SessionHistory';
 import { Stats } from './pages/Stats';
+import { Profile } from './pages/Profile';
+import { Weight } from './pages/Weight';
+import { Measurements } from './pages/Measurements';
+import { Progress } from './pages/Progress';
 import { useAuth } from './auth/AuthContext';
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -114,6 +118,46 @@ export function App() {
           <ProtectedRoute>
             <Shell>
               <Stats />
+            </Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Shell>
+              <Profile />
+            </Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/weight"
+        element={
+          <ProtectedRoute>
+            <Shell>
+              <Weight />
+            </Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/measurements"
+        element={
+          <ProtectedRoute>
+            <Shell>
+              <Measurements />
+            </Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/progress"
+        element={
+          <ProtectedRoute>
+            <Shell>
+              <Progress />
             </Shell>
           </ProtectedRoute>
         }

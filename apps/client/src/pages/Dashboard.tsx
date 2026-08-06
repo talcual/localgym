@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { exercisesApi, sessionsApi, statsApi } from '../api';
-import { Exercise, SessionLog, SummaryStats } from '../api/types';
+import { exercisesApi, sessionsApi, statsApi, progressApi } from '../api';
+import { Exercise, ProgressSummary, SessionLog, SummaryStats } from '../api/types';
 import { formatDuration } from '../utils/time';
 
 export function Dashboard() {
@@ -10,6 +10,7 @@ export function Dashboard() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [todaySessions, setTodaySessions] = useState<SessionLog[]>([]);
   const [stats, setStats] = useState<SummaryStats | null>(null);
+  const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,8 +18,9 @@ export function Dashboard() {
       exercisesApi.list(),
       sessionsApi.list(),
       statsApi.summary(),
+      progressApi.summary(),
     ])
-      .then(([exs, allSessions, summary]) => {
+      .then(([exs, allSessions, summary, prog]) => {
         setExercises(exs);
         const today = new Date();
         const y = today.getFullYear();
@@ -31,6 +33,7 @@ export function Dashboard() {
           ),
         );
         setStats(summary);
+        setProgress(prog);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -59,12 +62,22 @@ export function Dashboard() {
           value={`${stats?.currentStreakDays ?? 0}d`}
         />
         <StatCard
-          label="Mejor racha"
-          value={`${stats?.bestStreakDays ?? 0}d`}
+          label="IMC"
+          value={progress?.bmi.bmi != null ? progress.bmi.bmi.toFixed(1) : '—'}
+          hint={progress?.bmi.categoryLabel ?? 'Define tu altura'}
         />
         <StatCard
-          label="Tiempo total"
-          value={formatDuration(stats?.totalDurationSec ?? 0)}
+          label="Peso"
+          value={
+            progress?.latestWeight
+              ? `${progress.latestWeight.weightKg.toFixed(1)} kg`
+              : '—'
+          }
+          hint={
+            progress?.weightDelta == null
+              ? 'Sin cambios'
+              : `${progress.weightDelta > 0 ? '+' : ''}${progress.weightDelta.toFixed(1)} kg`
+          }
         />
       </div>
 
@@ -110,7 +123,15 @@ export function Dashboard() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Sesiones de hoy</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Sesiones de hoy</h2>
+          <Link
+            to="/progress"
+            className="text-sm text-brand-400 hover:underline"
+          >
+            Ver progreso
+          </Link>
+        </div>
         {todaySessions.length === 0 ? (
           <div className="text-sm text-slate-400">
             Aún no has entrenado hoy.
@@ -147,13 +168,24 @@ export function Dashboard() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
       <div className="text-xs uppercase tracking-wide text-slate-400">
         {label}
       </div>
       <div className="text-2xl font-semibold mt-1">{value}</div>
+      {hint && (
+        <div className="text-xs text-slate-500 mt-1">{hint}</div>
+      )}
     </div>
   );
 }
