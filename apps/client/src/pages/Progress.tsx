@@ -1,31 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { progressApi, weightApi, measurementsApi, usersApi } from '../api';
-import { BmiInfo, BmiHistoryPoint, BodyMeasurement, ProgressSummary, UserProfile, WeightEntry } from '../api/types';
+import {
+  BmiHistoryPoint,
+  BodyMeasurement,
+  ProgressSummary,
+  UserProfile,
+  WeightEntry,
+} from '../api/types';
+import { BMI_RANGES, BmiBar, bmiCategoryColor } from '../components/BmiBar';
 import { LineChart } from '../components/LineChart';
 import { formatDate, formatDateTime } from '../utils/time';
-
-const BMI_RANGES: Array<{ max: number; label: string; color: string; key: BmiInfo['category'] }> = [
-  { max: 18.5, label: 'Bajo peso', color: 'bg-sky-500', key: 'UNDERWEIGHT' },
-  { max: 25, label: 'Normal', color: 'bg-emerald-500', key: 'NORMAL' },
-  { max: 30, label: 'Sobrepeso', color: 'bg-amber-500', key: 'OVERWEIGHT' },
-  { max: 35, label: 'Obesidad I', color: 'bg-orange-500', key: 'OBESE_I' },
-  { max: 40, label: 'Obesidad II', color: 'bg-red-500', key: 'OBESE_II' },
-  { max: Infinity, label: 'Obesidad III', color: 'bg-red-700', key: 'OBESE_III' },
-];
-
-function bmiColor(category: BmiInfo['category'] | null): string {
-  if (!category) return 'text-slate-400';
-  const map: Record<string, string> = {
-    UNDERWEIGHT: 'text-sky-400',
-    NORMAL: 'text-emerald-400',
-    OVERWEIGHT: 'text-amber-400',
-    OBESE_I: 'text-orange-400',
-    OBESE_II: 'text-red-400',
-    OBESE_III: 'text-red-500',
-  };
-  return map[category] ?? 'text-slate-400';
-}
 
 export function Progress() {
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
@@ -52,15 +37,6 @@ export function Progress() {
       })
       .finally(() => setLoading(false));
   }, []);
-
-  const bmiMarkerPosition = useMemo(() => {
-    const bmi = summary?.bmi.bmi;
-    if (bmi == null) return null;
-    const min = 12;
-    const max = 45;
-    const pct = Math.max(0, Math.min(100, ((bmi - min) / (max - min)) * 100));
-    return pct;
-  }, [summary?.bmi.bmi]);
 
   if (loading) return <div className="text-slate-400">Cargando...</div>;
   if (!summary) return <div className="text-slate-400">Sin datos</div>;
@@ -92,7 +68,7 @@ export function Progress() {
 
         <div className="grid sm:grid-cols-2 gap-4 items-center">
           <div className="text-center sm:text-left">
-            <div className={`text-5xl font-bold ${bmiColor(bmi.category)}`}>
+            <div className={`text-5xl font-bold ${bmiCategoryColor(bmi.category)}`}>
               {bmi.bmi ?? '-'}
             </div>
             <div className="text-sm text-slate-400 mt-1">
@@ -105,31 +81,7 @@ export function Progress() {
             </div>
           </div>
           <div className="space-y-2">
-            <div className="flex h-3 rounded-full overflow-hidden">
-              {BMI_RANGES.map((r) => (
-                <div
-                  key={r.key ?? r.label}
-                  className={`${r.color} flex-1`}
-                  title={r.label}
-                />
-              ))}
-            </div>
-            {bmiMarkerPosition != null && (
-              <div className="relative h-4">
-                <div
-                  className="absolute -top-1 w-1 h-6 bg-white"
-                  style={{ left: `${bmiMarkerPosition}%` }}
-                />
-              </div>
-            )}
-            <div className="flex justify-between text-xs text-slate-500">
-              <span>12</span>
-              <span>18.5</span>
-              <span>25</span>
-              <span>30</span>
-              <span>35</span>
-              <span>40+</span>
-            </div>
+            <BmiBar bmi={bmi.bmi} category={bmi.category} />
             <div className="grid grid-cols-2 gap-1 text-xs text-slate-400 mt-2">
               {BMI_RANGES.map((r) => (
                 <div key={r.key ?? r.label} className="flex items-center gap-2">

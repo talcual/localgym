@@ -9,7 +9,8 @@ import {
   weightApi,
   usersApi,
 } from '../api';
-import {
+import type {
+  BmiCategory,
   Exercise,
   ProgressSummary,
   SessionLog,
@@ -17,8 +18,8 @@ import {
   UserProfile,
   WeightEntry,
 } from '../api/types';
-import { LineChart } from '../components/LineChart';
-import { formatDate, formatDuration } from '../utils/time';
+import { BmiBar, bmiCategoryColor } from '../components/BmiBar';
+import { formatDuration } from '../utils/time';
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -26,7 +27,6 @@ export function Dashboard() {
   const [todaySessions, setTodaySessions] = useState<SessionLog[]>([]);
   const [stats, setStats] = useState<SummaryStats | null>(null);
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
-  const [bmiHistory, setBmiHistory] = useState<Array<{ recordedAt: string; bmi: number }>>([]);
   const [weights, setWeights] = useState<WeightEntry[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,11 +37,10 @@ export function Dashboard() {
       sessionsApi.list(),
       statsApi.summary(),
       progressApi.summary(),
-      progressApi.bmiHistory(),
       weightApi.list(),
       usersApi.me(),
     ])
-      .then(([exs, allSessions, summary, prog, bmiHist, w, p]) => {
+      .then(([exs, allSessions, summary, prog, w, p]) => {
         setExercises(exs);
         const today = new Date();
         const y = today.getFullYear();
@@ -55,7 +54,6 @@ export function Dashboard() {
         );
         setStats(summary);
         setProgress(prog);
-        setBmiHistory(bmiHist);
         setWeights(w);
         setProfile(p);
       })
@@ -66,14 +64,8 @@ export function Dashboard() {
     return <div className="text-slate-400">Cargando...</div>;
   }
 
-  const weightChart = [...weights]
-    .reverse()
-    .map((w) => ({ label: formatDate(w.recordedAt), value: w.weightKg }));
-  const bmiChart = bmiHistory.map((p) => ({
-    label: formatDate(p.recordedAt),
-    value: p.bmi,
-  }));
-  const hasProgressData = bmiChart.length > 0 || weightChart.length > 0;
+  const bmi = progress?.bmi.bmi ?? null;
+  const bmiCategory = progress?.bmi.category ?? null;
 
   return (
     <div className="space-y-8">
@@ -88,113 +80,20 @@ export function Dashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Sesiones" value={String(stats?.totalSessions ?? 0)} />
-        <StatCard
-          label="Racha"
-          value={`${stats?.currentStreakDays ?? 0}d`}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <WeightCard
+          weightKg={progress?.latestWeight?.weightKg ?? null}
+          previousWeightKg={progress?.previousWeight?.weightKg ?? null}
+          delta={progress?.weightDelta ?? null}
+          history={weights}
         />
-        <StatCard
-          label="IMC"
-          value={progress?.bmi.bmi != null ? progress.bmi.bmi.toFixed(1) : '—'}
-          hint={progress?.bmi.categoryLabel ?? 'Define tu altura'}
-        />
-        <StatCard
-          label="Peso"
-          value={
-            progress?.latestWeight
-              ? `${progress.latestWeight.weightKg.toFixed(1)} kg`
-              : '—'
-          }
-          hint={
-            progress?.weightDelta == null
-              ? 'Sin cambios'
-              : `${progress.weightDelta > 0 ? '+' : ''}${progress.weightDelta.toFixed(1)} kg`
-          }
+        <BmiCard
+          bmi={bmi}
+          category={bmiCategory}
+          categoryLabel={progress?.bmi.categoryLabel ?? null}
+          hasHeight={Boolean(profile?.heightCm)}
         />
       </div>
-
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Progreso</h2>
-          <Link
-            to="/progress"
-            className="text-sm text-brand-400 hover:underline"
-          >
-            Ver detalle
-          </Link>
-        </div>
-
-        {!hasProgressData ? (
-          <div className="text-sm text-slate-400 py-4">
-            {!profile?.heightCm ? (
-              <>
-                Define tu{' '}
-                <Link to="/profile" className="text-brand-400 hover:underline">
-                  altura
-                </Link>{' '}
-                y registra tu primer peso para ver el progreso.
-              </>
-            ) : (
-              <>
-                Registra tu primer peso en{' '}
-                <Link to="/weight" className="text-brand-400 hover:underline">
-                  Peso
-                </Link>{' '}
-                para ver la curva.
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="grid lg:grid-cols-2 gap-5">
-            <ProgressBlock
-              title="Peso"
-              empty={weightChart.length === 0}
-              emptyCta={
-                <Link
-                  to="/weight"
-                  className="text-xs text-brand-400 hover:underline"
-                >
-                  Registrar peso
-                </Link>
-              }
-            >
-              <LineChart
-                data={weightChart}
-                height={140}
-                yFormat={(n) => `${n.toFixed(1)} kg`}
-              />
-            </ProgressBlock>
-            <ProgressBlock
-              title="IMC"
-              empty={bmiChart.length === 0}
-              emptyCta={
-                !profile?.heightCm ? (
-                  <Link
-                    to="/profile"
-                    className="text-xs text-brand-400 hover:underline"
-                  >
-                    Definir altura
-                  </Link>
-                ) : (
-                  <Link
-                    to="/weight"
-                    className="text-xs text-brand-400 hover:underline"
-                  >
-                    Registrar peso
-                  </Link>
-                )
-              }
-            >
-              <LineChart
-                data={bmiChart}
-                height={140}
-                yFormat={(n) => n.toFixed(1)}
-              />
-            </ProgressBlock>
-          </div>
-        )}
-      </section>
 
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -238,7 +137,15 @@ export function Dashboard() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Sesiones de hoy</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Sesiones de hoy</h2>
+          <Link
+            to="/progress"
+            className="text-sm text-brand-400 hover:underline"
+          >
+            Ver progreso
+          </Link>
+        </div>
         {todaySessions.length === 0 ? (
           <div className="text-sm text-slate-400">
             Aún no has entrenado hoy.
@@ -275,52 +182,136 @@ export function Dashboard() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  hint,
+function WeightCard({
+  weightKg,
+  previousWeightKg,
+  delta,
+  history,
 }: {
-  label: string;
-  value: string;
-  hint?: string;
+  weightKg: number | null;
+  previousWeightKg: number | null;
+  delta: number | null;
+  history: WeightEntry[];
 }) {
+  const deltaColor =
+    delta == null
+      ? 'text-slate-400'
+      : delta < 0
+        ? 'text-emerald-400'
+        : delta > 0
+          ? 'text-amber-400'
+          : 'text-slate-300';
+
+  const sparkline = [...history].reverse().slice(-30).map((w) => w.weightKg);
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-      <div className="text-xs uppercase tracking-wide text-slate-400">
-        {label}
+      <div className="flex items-center justify-between">
+        <div className="text-xs uppercase tracking-wide text-slate-400">
+          Peso
+        </div>
+        <Link to="/weight" className="text-xs text-brand-400 hover:underline">
+          Ver
+        </Link>
       </div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-      {hint && (
-        <div className="text-xs text-slate-500 mt-1">{hint}</div>
-      )}
+      <div className="flex items-baseline gap-2 mt-1">
+        <div className="text-3xl font-semibold">
+          {weightKg != null ? `${weightKg.toFixed(1)} kg` : '—'}
+        </div>
+        <div className={`text-sm ${deltaColor}`}>
+          {delta == null
+            ? previousWeightKg == null
+              ? 'Sin historial'
+              : ''
+            : `${delta > 0 ? '+' : ''}${delta.toFixed(1)} kg`}
+        </div>
+      </div>
+      <div className="h-10 mt-2">
+        <WeightSparkline values={sparkline} />
+      </div>
     </div>
   );
 }
 
-function ProgressBlock({
-  title,
-  empty,
-  emptyCta,
-  children,
+function BmiCard({
+  bmi,
+  category,
+  categoryLabel,
+  hasHeight,
 }: {
-  title: string;
-  empty: boolean;
-  emptyCta: React.ReactNode;
-  children: React.ReactNode;
+  bmi: number | null;
+  category: BmiCategory | null;
+  categoryLabel: string | null;
+  hasHeight: boolean;
 }) {
   return (
-    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-medium text-slate-300">{title}</div>
-      </div>
-      {empty ? (
-        <div className="text-xs text-slate-500 py-6 flex items-center justify-center gap-2">
-          <span>Sin datos.</span>
-          {emptyCta}
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+      <div className="flex items-center justify-between">
+        <div className="text-xs uppercase tracking-wide text-slate-400">
+          IMC
         </div>
-      ) : (
-        children
-      )}
+        <Link to="/progress" className="text-xs text-brand-400 hover:underline">
+          Ver
+        </Link>
+      </div>
+      <div className="flex items-baseline gap-2 mt-1">
+        <div className={`text-3xl font-semibold ${bmiCategoryColor(category)}`}>
+          {bmi != null ? bmi.toFixed(1) : '—'}
+        </div>
+        <div className="text-sm text-slate-400">
+          {categoryLabel ??
+            (hasHeight ? 'Registra tu peso' : 'Define tu altura')}
+        </div>
+      </div>
+      <div className="mt-2">
+        <BmiBar bmi={bmi} category={category} compact />
+      </div>
     </div>
+  );
+}
+
+function WeightSparkline({ values }: { values: number[] }) {
+  if (values.length === 0) {
+    return (
+      <div className="h-full flex items-center text-xs text-slate-500">
+        Registra tu peso para ver la curva.
+      </div>
+    );
+  }
+  if (values.length === 1) {
+    return (
+      <div className="h-full flex items-center text-xs text-slate-500">
+        Una sola medición. Registra más para ver la tendencia.
+      </div>
+    );
+  }
+  const w = 240;
+  const h = 40;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const step = w / (values.length - 1);
+  const points = values
+    .map((v, i) => {
+      const x = i * step;
+      const y = h - ((v - min) / range) * (h - 4) - 2;
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(' ');
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className="w-full h-full"
+    >
+      <path
+        d={points}
+        fill="none"
+        className="stroke-brand-400"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
