@@ -38,6 +38,19 @@ export class ExercisesService {
     return res.rows.map(mapExercise);
   }
 
+  /**
+   * Lista solo los ejercicios importados del catalogo (AI Couch / manual import).
+   */
+  async listImported(userId: string): Promise<Exercise[]> {
+    const res = await this.db.execute({
+      sql: `SELECT * FROM exercises
+            WHERE user_id = ? AND source = 'ai_import'
+            ORDER BY created_at DESC`,
+      args: [userId],
+    });
+    return res.rows.map(mapExercise);
+  }
+
   async findOne(userId: string, id: string): Promise<Exercise> {
     const res = await this.db.execute({
       sql: 'SELECT * FROM exercises WHERE id = ?',

@@ -33,7 +33,14 @@ export class ExercisesController {
   listManual(@CurrentUser() current: { userId: string }) {
     return this.exercisesService.listManual(current.userId);
   }
-
+  /**
+   * Lista solo los ejercicios importados desde el catálogo
+   * (los que llegaron vía AI Couch o import manual del catálogo).
+   */
+  @Get('imported')
+  listImported(@CurrentUser() current: { userId: string }) {
+    return this.exercisesService.listImported(current.userId);
+  }
   @Get(':id')
   findOne(
     @CurrentUser() current: { userId: string },

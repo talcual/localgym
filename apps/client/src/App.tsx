@@ -18,6 +18,7 @@ import { Progress } from './pages/Progress';
 import { Routines } from './pages/Routines';
 import { Calendar } from './pages/Calendar';
 import { Goals } from './pages/Goals';
+import { ExercisesImported } from './pages/ExercisesImported';
 import { useAuth } from './auth/AuthContext';
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -81,6 +82,16 @@ export function App() {
           <ProtectedRoute>
             <Shell>
               <ExerciseForm />
+            </Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/exercises/imported"
+        element={
+          <ProtectedRoute>
+            <Shell>
+              <ExercisesImported />
             </Shell>
           </ProtectedRoute>
         }

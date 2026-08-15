@@ -5,7 +5,7 @@ import type { Exercise, ExerciseType } from '../api/types';
 
 type TypeFilter = 'all' | ExerciseType;
 
-export function ExercisesList() {
+export function ExercisesImported() {
   const navigate = useNavigate();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
@@ -13,9 +13,8 @@ export function ExercisesList() {
   const [type, setType] = useState<TypeFilter>('all');
 
   function load() {
-    // Endpoint dedicado: solo los creados manualmente por el usuario.
     exercisesApi
-      .listManual()
+      .listImported()
       .then(setExercises)
       .finally(() => setLoading(false));
   }
@@ -46,22 +45,24 @@ export function ExercisesList() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold">Ejercicios propios</h1>
+          <h1 className="text-2xl font-semibold">Ejercicios importados</h1>
           <p className="mt-1 text-xs text-slate-400">
+            Los que llegaron desde el catálogo (AI Couch o import manual).
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500">
             {totalCount === 0
-              ? 'Aún no tienes ejercicios creados.'
+              ? 'Aún no tienes ejercicios importados.'
               : `${shownCount} de ${totalCount} mostrados`}
           </p>
         </div>
         <Link
-          to="/exercises/new"
+          to="/catalog"
           className="bg-brand-600 hover:bg-brand-500 px-3 py-2 rounded-md text-sm"
         >
-          + Nuevo ejercicio
+          + Importar del catálogo
         </Link>
       </div>
 
-      {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800/80 bg-[#0d1526] p-3">
         <div className="flex-1 min-w-[180px]">
           <label className="sr-only" htmlFor="exercise-search">
@@ -93,7 +94,14 @@ export function ExercisesList() {
 
       {totalCount === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-          Aún no tienes ejercicios. Crea uno con "+ Nuevo ejercicio".
+          Aún no tienes ejercicios importados.
+          <div className="mt-2 text-xs">
+            Andá al{' '}
+            <Link to="/catalog" className="text-violet-300 underline">
+              Catálogo
+            </Link>{' '}
+            o generá una rutina con AI Couch.
+          </div>
         </div>
       ) : shownCount === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
@@ -154,6 +162,28 @@ export function ExercisesList() {
   );
 }
 
+function SourceBadge({ source }: { source: Exercise['source'] }) {
+  const map = {
+    manual: { label: 'Propio', cls: 'bg-slate-700 text-slate-200' },
+    ai_import: { label: 'AI', cls: 'bg-violet-500/20 text-violet-200' },
+  } as const;
+  const v = map[source];
+  return (
+    <span
+      className={
+        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ' + v.cls
+      }
+      title={
+        source === 'ai_import'
+          ? 'Importado del catálogo por AI Couch'
+          : 'Creado manualmente'
+      }
+    >
+      {v.label}
+    </span>
+  );
+}
+
 function TypeChips({
   value,
   onChange,
@@ -208,28 +238,6 @@ function TypeBadge({ type }: { type: ExerciseType }) {
     <span
       className={
         'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ' + v.cls
-      }
-    >
-      {v.label}
-    </span>
-  );
-}
-
-function SourceBadge({ source }: { source: Exercise['source'] }) {
-  const map = {
-    manual: { label: 'Propio', cls: 'bg-slate-700 text-slate-200' },
-    ai_import: { label: 'AI', cls: 'bg-violet-500/20 text-violet-200' },
-  } as const;
-  const v = map[source];
-  return (
-    <span
-      className={
-        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ' + v.cls
-      }
-      title={
-        source === 'ai_import'
-          ? 'Importado del catálogo por AI Couch'
-          : 'Creado manualmente'
       }
     >
       {v.label}

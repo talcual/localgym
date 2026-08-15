@@ -281,7 +281,10 @@ function RoutineCard({
                       key={it.id}
                       className="flex items-center justify-between gap-2"
                     >
-                      <span className="truncate text-slate-200">{name}</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <ExerciseSourceBadge source={ex?.source} />
+                        <span className="truncate text-slate-200">{name}</span>
+                      </span>
                       <span className="shrink-0 text-[11px] text-slate-500">
                         {meta}
                       </span>
@@ -368,4 +371,41 @@ function describeItemMeta(
   else if (sets != null) parts.push(`${sets} series`);
   if (rest != null) parts.push(`descanso ${rest}s`);
   return parts.join(' · ') || '—';
+}
+
+
+function ExerciseSourceBadge({
+  source,
+}: {
+  source?: Exercise['source'];
+}) {
+  if (!source) {
+    return (
+      <span
+        className="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-500"
+        title="Origen desconocido"
+      >
+        ·
+      </span>
+    );
+  }
+  const map = {
+    manual: { label: 'Propio', cls: 'bg-slate-700 text-slate-200' },
+    ai_import: { label: 'AI', cls: 'bg-violet-500/20 text-violet-200' },
+  } as const;
+  const v = map[source];
+  return (
+    <span
+      className={
+        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ' + v.cls
+      }
+      title={
+        source === 'ai_import'
+          ? 'Importado del catálogo por AI Couch'
+          : 'Creado manualmente'
+      }
+    >
+      {v.label}
+    </span>
+  );
 }
