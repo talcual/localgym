@@ -6,6 +6,7 @@ import {
   Home,
   Library,
   LineChart,
+  ListChecks,
   Settings as SettingsIcon,
   Target,
   User,
@@ -22,7 +23,8 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 
 const navigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
   ['Inicio', '/app', Home],
-  ['Rutina', '/exercises', Dumbbell],
+  ['Mis rutinas', '/routines', ListChecks],
+  ['Ejercicios', '/exercises', Dumbbell],
   ['Catálogo', '/catalog', Library],
   ['Historial', '/sessions', Calendar],
   ['Progreso', '/progress', LineChart],
