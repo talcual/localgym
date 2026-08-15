@@ -406,7 +406,7 @@ function MetricCard({
 function SummaryCard({ sessions, totalMinutes, totalReps, completed }: { sessions: SessionLog[]; totalMinutes: number; totalReps: number; completed: number }) {
   return (
     <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
-      <div className="flex items-center justify-between"><h2 className="font-semibold">Resumen de hoy</h2><Link to="/sessions" className="text-xs text-violet-400 hover:text-violet-300">Ver historial</Link></div>
+      <div className="flex items-center justify-between"><h2 className="text-base font-semibold">Resumen de hoy</h2><Link to="/sessions" className="text-sm text-violet-400 hover:text-violet-300">Ver historial</Link></div>
       <div className="mt-6 grid grid-cols-4 divide-x divide-slate-800">
         <SummaryValue icon="◷" value={String(totalMinutes)} label="minutos" />
         <SummaryValue icon="♨" value={String(totalReps)} label="repeticiones" />
@@ -418,7 +418,13 @@ function SummaryCard({ sessions, totalMinutes, totalReps, completed }: { session
 }
 
 function SummaryValue({ icon, value, label }: { icon: string; value: string; label: string }) {
-  return <div className="px-2 text-center first:pl-0 last:pr-0"><div className="text-lg text-violet-400">{icon}</div><div className="mt-1 text-xl font-semibold">{value}</div><div className="mt-1 text-[10px] text-slate-400">{label}</div></div>;
+  return (
+    <div className="px-2 text-center first:pl-0 last:pr-0">
+      <div className="text-2xl text-violet-400">{icon}</div>
+      <div className="mt-2 text-2xl font-semibold">{value}</div>
+      <div className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
+    </div>
+  );
 }
 
 function BodyMetricsCard({ progress }: { progress: ProgressSummary | null }) {
@@ -429,7 +435,22 @@ function BodyMetricsCard({ progress }: { progress: ProgressSummary | null }) {
     ['Grasa corporal', measurement?.bodyFatPct != null ? `${measurement.bodyFatPct.toFixed(1)}%` : 'Sin datos'],
     ['Cintura', measurement?.waistCm != null ? `${measurement.waistCm.toFixed(1)} cm` : 'Sin datos'],
   ];
-  return <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4"><div className="flex items-center justify-between"><h2 className="font-semibold">Body Metrics</h2><Link to="/progress" className="text-xs text-violet-400 hover:text-violet-300">Ver historial</Link></div><div className="mt-4 space-y-3">{rows.map(([label, value]) => <div key={label} className="flex justify-between text-xs"><span className="text-slate-400">{label}</span><span className="text-slate-200">{value}</span></div>)}</div></div>;
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold">Body Metrics</h2>
+        <Link to="/progress" className="text-sm text-violet-400 hover:text-violet-300">Ver historial</Link>
+      </div>
+      <div className="mt-4 space-y-3">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between text-sm">
+            <span className="text-slate-300">{label}</span>
+            <span className="font-medium text-slate-100">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function WeightCard({
