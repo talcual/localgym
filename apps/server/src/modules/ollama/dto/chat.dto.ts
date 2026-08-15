@@ -48,9 +48,11 @@ export class ChatDto {
 
 /**
  * Para pedirle a Ollama un JSON estructurado con IDs concretos de ejercicios.
- * El cliente debe pasar un `schemaHint` (objeto JSONSchema mínimo) que
- * documente qué claves se esperan. El backend lo reenvía tal cual al
- * parámetro `format` de /api/generate.
+ *
+ * Estrategia de dos pasos: el cliente streameó primero el plan en texto
+ * plano y nos lo reenvía en `planText`. El backend hace una segunda
+ * llamada a Ollama con un prompt de "convertir este plan a JSON" usando
+ * el `schemaHint` como `format`.
  */
 export class StructuredChatDto {
   @IsOptional()
@@ -58,15 +60,25 @@ export class StructuredChatDto {
   @MaxLength(100)
   model?: string;
 
+  /** System original usado para generar el plan en texto plano. */
+  @IsOptional()
   @IsString()
   @MaxLength(8_000)
-  system: string;
+  system?: string;
 
+  /** Prompt original usado para generar el plan (referencia). */
+  @IsOptional()
   @IsString()
   @MaxLength(16_000)
-  prompt: string;
+  prompt?: string;
+
+  /** Texto del plan ya streameado al usuario. Es lo que convertiremos a JSON. */
+  @IsString()
+  @MaxLength(16_000)
+  planText: string;
 
   /** JSONSchema mínimo que describe la forma esperada. */
+  @IsOptional()
   @IsObject()
-  schemaHint: Record<string, unknown>;
+  schemaHint?: Record<string, unknown>;
 }

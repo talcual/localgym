@@ -109,6 +109,10 @@ export class OllamaController {
    * Versión no-stream que devuelve un JSON estructurado. Útil para
    * pedirle al modelo que devuelva IDs concretos del catálogo de
    * ejercicios (catalogId/exerciseId) para poder persistir la rutina.
+   *
+   * Estrategia: el cliente ya streameó el plan en texto plano y nos lo
+   * pasa en `planText`. Hacemos una segunda llamada a Ollama pidiendo
+   * explícitamente que convierta ese texto a JSON.
    */
   @Post('structured')
   async structured(
@@ -118,9 +122,10 @@ export class OllamaController {
     void current;
     return this.ollamaService.generateStructuredJson({
       model: dto.model,
-      system: dto.system,
-      prompt: dto.prompt,
-      schemaHint: dto.schemaHint,
+      system: dto.system ?? '',
+      prompt: dto.prompt ?? '',
+      planText: dto.planText,
+      schemaHint: dto.schemaHint ?? {},
     });
   }
 }

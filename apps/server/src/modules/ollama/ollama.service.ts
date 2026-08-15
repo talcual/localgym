@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -135,16 +136,31 @@ export class OllamaService {
   }
 
   /**
-   * Versión no-stream que fuerza JSON estructurado vía Ollama `format: 'json'`.
-   * Se usa para pedir al modelo que devuelva la rutina con IDs concretos
-   * (catalog_id / exercise_id) tras haber streameado la versión "humana".
+   * Estrategia de DOS PASOS para extraer el JSON estructurado de un plan:
    *
-   * Devuelve el objeto parseado, o lanza BadRequest si no parsea.
+   *   1) El frontend ya streameó la versión "humana" del plan (texto plano).
+   *      Nos la pasa en `planText`.
+   *   2) Hacemos una segunda llamada a Ollama con un prompt que dice:
+   *      "convertí este plan al esquema JSON X". Le pasamos el `schemaHint`
+   *      como `format` para que Ollama fuerce la salida a JSON válido
+   *      cuando el modelo lo soporte.
+   *
+   * Esta separación funciona mucho mejor con modelos chicos (llama3.1 8B,
+   * mistral, gemma) porque solo tienen que *transformar*, no *inventar* el
+   * plan en formato JSON en una sola pasada.
+   *
+   * Devuelve el objeto parseado o lanza BadRequest/ServiceUnavailable con
+   * un mensaje claro.
    */
   async generateStructuredJson(args: {
     model?: string;
+    /** System original usado para generar el plan en texto plano. */
     system: string;
+    /** Prompt original que se usó para generar el plan. */
     prompt: string;
+    /** Texto del plan ya streameado al usuario. */
+    planText: string;
+    /** JSONSchema mínimo que describe la forma esperada. */
     schemaHint: Record<string, unknown>;
   }): Promise<unknown> {
     const baseUrl = this.defaultBaseUrl.replace(/\/+$/, '');
@@ -155,6 +171,22 @@ export class OllamaService {
         ? setTimeout(() => ctrl.abort(), this.upstreamTimeoutMs)
         : null;
 
+    const conversionSystem =
+      `Sos un asistente que convierte planes de entrenamiento en texto plano a un JSON estricto.\n` +
+      `Reglas obligatorias:\n` +
+      `- Respondé ÚNICAMENTE con un objeto JSON válido que cumpla el esquema dado.\n` +
+      `- NO incluyas texto antes ni después del JSON. Sin markdown, sin explicaciones, sin fences.\n` +
+      `- Si el plan menciona ejercicios que están en la lista "EJERCICIOS DISPONIBLES (con id)", usá el id exacto.\n` +
+      `- Si el plan menciona ejercicios que NO están en la lista, devolvé ese item con \`catalogId\` y \`exerciseId\` en null.\n` +
+      `- Mantené el orden de los días y la cantidad que el usuario pidió.`;
+
+    const conversionPrompt =
+      `Convertí el siguiente plan al esquema JSON indicado.\n\n` +
+      `=== PLAN EN TEXTO PLANO ===\n` +
+      `${args.planText.trim()}\n` +
+      `=== FIN DEL PLAN ===\n\n` +
+      `Recordá: respondé SOLO con el JSON, nada más.`;
+
     try {
       const res = await fetch(`${baseUrl}/api/generate`, {
         method: 'POST',
@@ -162,34 +194,66 @@ export class OllamaService {
         signal: ctrl.signal,
         body: JSON.stringify({
           model,
-          system: args.system,
-          prompt: args.prompt,
+          system: args.system
+            ? `${args.system}\n\n${conversionSystem}`
+            : conversionSystem,
+          prompt: conversionPrompt,
           stream: false,
           format: args.schemaHint,
         }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(
-          `Ollama structured HTTP ${res.status}: ${this.sanitizeErrorBody(text) || 'sin cuerpo'}`,
+        throw new ServiceUnavailableException(
+          `Ollama structured HTTP ${res.status}: ${
+            this.sanitizeErrorBody(text) || 'sin cuerpo'
+          }`,
         );
       }
       const json = (await res.json()) as { response?: string };
-      const text = json.response ?? '';
+      const text = (json.response ?? '').trim();
+
+      if (text.length === 0) {
+        throw new BadRequestException(
+          'Ollama devolvió una respuesta vacía. ¿El modelo soporta "format" JSON?',
+        );
+      }
+
+      // 1) Intento directo.
       try {
         return JSON.parse(text);
       } catch {
-        // Si el modelo devolvió JSON con algún ruido (markdown ```), lo limpiamos.
-        const cleaned = text
-          .trim()
-          .replace(/^```(?:json)?/i, '')
-          .replace(/```$/i, '')
-          .trim();
+        /* cae al segundo intento */
+      }
+
+      // 2) Limpieza básica de fences markdown ```json ... ```.
+      const cleaned = text
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim();
+      try {
         return JSON.parse(cleaned);
+      } catch (err) {
+        this.logger.warn(
+          `Ollama no devolvió JSON válido (primeros 240 chars): ${text.slice(0, 240)}`,
+        );
+        throw new BadRequestException(
+          `El modelo no devolvió un JSON válido: ${(err as Error).message}`,
+        );
       }
     } catch (err) {
-      this.logger.error(`generateStructuredJson fallo: ${(err as Error).message}`);
-      throw err;
+      if (
+        err instanceof BadRequestException ||
+        err instanceof ServiceUnavailableException
+      ) {
+        throw err;
+      }
+      this.logger.error(
+        `generateStructuredJson fallo: ${(err as Error).message}`,
+      );
+      throw new ServiceUnavailableException(
+        `No se pudo generar el JSON estructurado: ${(err as Error).message}`,
+      );
     } finally {
       if (timer) clearTimeout(timer);
     }

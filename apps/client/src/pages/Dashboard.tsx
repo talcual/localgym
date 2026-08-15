@@ -295,14 +295,17 @@ function AiFitnessCard({
     setSavingRoutine(true);
     setSaveError(null);
     try {
-      // 1) Pedimos la versión estructurada al backend (que llama a Ollama
-      //    en modo format:json con el mismo system+prompt).
+      // 1) Pedimos la versión estructurada al backend. Estrategia de dos
+      //    pasos: el plan ya fue streameado al usuario en `planText`, así
+      //    que el backend lo re-envía a Ollama con un prompt de "convertir
+      //    a JSON" en lugar de pedirle que invente todo el plan en JSON.
       const raw = await ollamaStructuredJson({
         system: request.system,
         prompt: request.messages
           .filter((m) => m.role === 'user')
           .map((m) => m.content)
           .join('\n'),
+        planText,
         schemaHint: ROUTINE_JSON_SCHEMA,
       });
       const parsed = parseRoutineStructured(raw, days);

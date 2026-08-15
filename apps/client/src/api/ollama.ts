@@ -222,17 +222,18 @@ export function listOllamaModels(): Promise<{ models: string[] }> {
 }
 
 /**
- * Pide al backend que llame a Ollama en modo "format: json" para extraer
- * una versión estructurada de la respuesta (p.ej. una rutina con IDs de
- * catálogo). Devuelve el objeto parseado tal cual lo emite el modelo.
+ * Pide al backend que llame a Ollama para convertir un plan ya streameado
+ * (texto plano) en un JSON estructurado con IDs de catálogo.
  *
- * `schemaHint` debe ser un JSONSchema mínimo (sólo lo necesita el backend
- * para reenviarlo al campo `format` de Ollama).
+ * Estrategia de dos pasos: el backend re-envía el `planText` a Ollama con
+ * un prompt de "convertir a JSON" + el `schemaHint` como `format`. Esto
+ * funciona mejor con modelos chicos que pedirles JSON en una sola pasada.
  */
 export function ollamaStructuredJson(args: {
   model?: string;
-  system: string;
-  prompt: string;
+  system?: string;
+  prompt?: string;
+  planText: string;
   schemaHint: Record<string, unknown>;
 }): Promise<unknown> {
   return api
