@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Sparkles } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
   exercisesApi,
@@ -77,9 +78,7 @@ export function Dashboard() {
           Hola, {user?.displayName} <span className="text-xl">👋</span>
         </h1>
         <p className="mt-1 text-sm text-slate-400">
-          {exercises.length === 0
-            ? 'Crea tu primera rutina para empezar.'
-            : 'Elige una rutina para empezar tu sesión de hoy.'}
+          Tu actividad reciente de un vistazo.
         </p>
       </div>
 
@@ -113,58 +112,266 @@ export function Dashboard() {
         />
       </div>
 
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Tu rutina de hoy</h2>
-          <Link
-            to="/exercises/new"
-            className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500"
-          >
-            + Nueva rutina
-          </Link>
-        </div>
-
-        {exercises.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-            Aún no tienes ninguna rutina.{' '}
-            <Link to="/exercises/new" className="text-brand-400 hover:underline">
-              Crea el primero
-            </Link>
-            .
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {exercises.map((ex) => (
-              <Link
-                key={ex.id}
-                to={`/sessions/run/${ex.id}`}
-                className="group block rounded-xl border border-slate-800/80 bg-[#0d1526] p-4 transition hover:border-violet-500/60 hover:bg-[#111b31]"
-              >
-                <div className="truncate font-medium group-hover:text-white">{ex.name}</div>
-                <div className="mt-1 text-xs text-slate-400">
-                  {ex.sets} juegos ·{' '}
-                  {ex.type === 'TIME' || ex.type === 'MIXED'
-                    ? `${ex.durationPerSetSec ?? 0}s`
-                    : `${ex.repsPerSet ?? 0} reps`}
-                  {ex.restSec ? ` · Descanso ${ex.restSec}s` : ''}
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-
       <div className="grid gap-3 lg:grid-cols-2">
-        <SummaryCard
-          sessions={todaySessions}
-          totalMinutes={totalMinutes}
-          totalReps={stats?.totalReps ?? 0}
-          completed={todaySessions.length}
-        />
-        <BodyMetricsCard progress={progress} />
+        <div className="space-y-3">
+          <SummaryCard
+            sessions={todaySessions}
+            totalMinutes={totalMinutes}
+            totalReps={stats?.totalReps ?? 0}
+            completed={todaySessions.length}
+          />
+          <BodyMetricsCard progress={progress} />
+        </div>
+        <AiFitnessCard profile={profile} progress={progress} stats={stats} />
       </div>
     </div>
   );
+}
+
+function AiFitnessCard({
+  profile,
+  progress,
+  stats,
+}: {
+  profile: UserProfile | null;
+  progress: ProgressSummary | null;
+  stats: SummaryStats | null;
+}) {
+  const [goal, setGoal] = useState<FitnessGoal>('strength');
+  const [level, setLevel] = useState<FitnessLevel>('beginner');
+  const [days, setDays] = useState<number>(4);
+  const [status, setStatus] = useState<AiStatus>('idle');
+
+  const canGenerate = status !== 'loading';
+
+  const age = useMemo(() => {
+    if (!profile?.birthdate) return null;
+    const b = new Date(profile.birthdate);
+    const diff = Date.now() - b.getTime();
+    if (Number.isNaN(diff)) return null;
+    return Math.max(0, Math.floor(diff / (365.25 * 24 * 3600 * 1000)));
+  }, [profile?.birthdate]);
+
+  const inputSummary = [
+    profile?.heightCm != null ? `${Math.round(profile.heightCm)} cm` : null,
+    profile?.sex ? labelSex(profile.sex) : null,
+    age != null ? `${age} años` : null,
+    progress?.latestWeight?.weightKg != null
+      ? `${progress.latestWeight.weightKg.toFixed(1)} kg`
+      : null,
+  ].filter(Boolean);
+
+  const demoPlan = useMemo(
+    () => buildDemoPlan({ goal, level, days }),
+    [goal, level, days],
+  );
+
+  function handleGenerate() {
+    setStatus('loading');
+    window.setTimeout(() => setStatus('ready'), 1400);
+  }
+
+  return (
+    <div className="flex h-full flex-col rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600/20 text-violet-400">
+              <Sparkles className="h-4 w-4" aria-hidden />
+            </span>
+            <h2 className="font-semibold">Recomendado fitness</h2>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            Genera un plan personalizado con IA a partir de tus métricas.
+          </p>
+          {inputSummary.length > 0 && (
+            <p className="mt-2 text-[11px] text-slate-500">
+              Usaremos: {inputSummary.join(' · ')}
+            </p>
+          )}
+        </div>
+        {status === 'ready' && (
+          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+            Demo: pendiente Ollama
+          </span>
+        )}
+      </div>
+
+      {status !== 'ready' ? (
+        <div className="mt-4 flex flex-1 flex-col gap-3">
+          <FieldSelect
+            label="Objetivo"
+            value={goal}
+            onChange={(v) => setGoal(v as FitnessGoal)}
+            options={[
+              ['strength', 'Fuerza'],
+              ['hypertrophy', 'Hipertrofia'],
+              ['fat_loss', 'Pérdida de grasa'],
+              ['endurance', 'Resistencia'],
+            ]}
+          />
+          <FieldSelect
+            label="Nivel"
+            value={level}
+            onChange={(v) => setLevel(v as FitnessLevel)}
+            options={[
+              ['beginner', 'Principiante'],
+              ['intermediate', 'Intermedio'],
+              ['advanced', 'Avanzado'],
+            ]}
+          />
+          <FieldSelect
+            label="Días por semana"
+            value={String(days)}
+            onChange={(v) => setDays(Number(v))}
+            options={[
+              ['3', '3 días'],
+              ['4', '4 días'],
+              ['5', '5 días'],
+              ['6', '6 días'],
+            ]}
+          />
+          <div className="mt-auto flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              disabled={!canGenerate}
+              onClick={handleGenerate}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-violet-600/60"
+            >
+              <Sparkles className="h-4 w-4" aria-hidden />
+              {status === 'loading' ? 'Generando plan…' : 'Generar plan con IA'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-1 flex-col">
+          <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+            <div className="text-xs uppercase tracking-wide text-slate-500">
+              {demoPlan.title}
+            </div>
+            <ul className="mt-2 space-y-2">
+              {demoPlan.days.map((day) => (
+                <li key={day.label} className="text-xs">
+                  <div className="font-medium text-slate-200">{day.label}</div>
+                  <div className="text-slate-400">{day.items.join(' · ')}</div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="mt-auto flex items-center gap-2 pt-3">
+            <button
+              type="button"
+              onClick={() => setStatus('idle')}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500"
+            >
+              Editar selección
+            </button>
+            <button
+              type="button"
+              onClick={() => undefined}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:border-violet-500 hover:text-white"
+            >
+              Crear como rutina
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FieldSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<readonly [string, string]>;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs uppercase tracking-wide text-slate-400">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-slate-800 bg-[#091121] px-3 py-2 text-sm text-slate-100 outline-none focus:border-violet-500"
+      >
+        {options.map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+type FitnessGoal = 'strength' | 'hypertrophy' | 'fat_loss' | 'endurance';
+type FitnessLevel = 'beginner' | 'intermediate' | 'advanced';
+type AiStatus = 'idle' | 'loading' | 'ready';
+
+function labelSex(sex: UserProfile['sex']) {
+  switch (sex) {
+    case 'MALE':
+      return 'Hombre';
+    case 'FEMALE':
+      return 'Mujer';
+    case 'OTHER':
+      return 'Otro';
+    default:
+      return '';
+  }
+}
+
+function buildDemoPlan({
+  goal,
+  level,
+  days,
+}: {
+  goal: FitnessGoal;
+  level: FitnessLevel;
+  days: number;
+}) {
+  const goalLabel = {
+    strength: 'Fuerza',
+    hypertrophy: 'Hipertrofia',
+    fat_loss: 'Pérdida de grasa',
+    endurance: 'Resistencia',
+  }[goal];
+  const levelLabel = {
+    beginner: 'Principiante',
+    intermediate: 'Intermedio',
+    advanced: 'Avanzado',
+  }[level];
+  const baseDays = {
+    3: ['Tren superior', 'Tren inferior', 'Cuerpo completo'],
+    4: ['Tren superior', 'Tren inferior', 'Empuje', 'Tirón'],
+    5: ['Empuje', 'Tirón', 'Pierna', 'Deficit calórico', 'Movilidad'],
+    6: ['Empuje', 'Tirón', 'Pierna', 'Upper ligero', 'Lower ligero', 'Core'],
+  } as const;
+  const labels = baseDays[days as 3 | 4 | 5 | 6] ?? baseDays[4];
+  const repsByGoal: Record<FitnessGoal, string> = {
+    strength: '5 x 5 al 80%',
+    hypertrophy: '4 x 10 al 70%',
+    fat_loss: '3 x 15 al 60%',
+    endurance: '3 x 20 al 50%',
+  };
+  return {
+    title: `Plan ${levelLabel} · ${goalLabel} · ${days} días`,
+    days: labels.map((label) => ({
+      label,
+      items: [
+        repsByGoal[goal],
+        'Descanso entre series 60s',
+        'Calentamiento 5–8 min',
+      ],
+    })),
+  };
 }
 
 
