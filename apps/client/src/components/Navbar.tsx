@@ -1,4 +1,16 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import {
+  BarChart3,
+  Calendar,
+  Dumbbell,
+  Home,
+  Library,
+  LineChart,
+  Settings as SettingsIcon,
+  Target,
+  User,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -8,24 +20,24 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
       : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
   }`;
 
-const navigation = [
-  ['Inicio', '/app', '⌂'],
-  ['Rutina', '/exercises', '⌘'],
-  ['Catálogo', '/catalog', '▣'],
-  ['Historial', '/sessions', '◷'],
-  ['Progreso', '/progress', '⌁'],
-  ['Stats', '/stats', '⌁'],
-  ['Calendario', '/sessions', '□'],
-  ['Objetivos', '/progress', '♡'],
-  ['Ajustes', '/profile', '⚙'],
-] as const;
+const navigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
+  ['Inicio', '/app', Home],
+  ['Rutina', '/exercises', Dumbbell],
+  ['Catálogo', '/catalog', Library],
+  ['Historial', '/sessions', Calendar],
+  ['Progreso', '/progress', LineChart],
+  ['Stats', '/stats', BarChart3],
+  ['Calendario', '/sessions', Calendar],
+  ['Objetivos', '/progress', Target],
+  ['Ajustes', '/profile', SettingsIcon],
+];
 
 function Navigation() {
   return (
     <nav className="flex gap-1 lg:block lg:space-y-1">
-      {navigation.map(([label, to, icon]) => (
+      {navigation.map(([label, to, Icon]) => (
         <NavLink key={`${label}-${to}`} to={to} end={to === '/app'} className={linkClass}>
-          <span className="w-4 text-center text-base text-slate-400">{icon}</span>
+          <Icon className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
           {label}
         </NavLink>
       ))}
@@ -42,17 +54,17 @@ export function Navbar() {
       <div className="flex items-center justify-between px-4 py-4 lg:px-5 lg:pt-5">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 font-bold shadow-lg shadow-violet-900/40">
-            <span className="text-white">╬</span>
+            <Dumbbell className="h-4 w-4 text-white" aria-hidden />
           </div>
           <span className="text-lg font-semibold">ModoFit</span>
         </div>
         <div className="flex items-center gap-3 lg:hidden">
           <NavLink
             to="/profile"
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-sm"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-sm hover:bg-slate-700"
             title="Perfil"
           >
-            <i className="fa-solid fa-user text-slate-300"></i>
+            <User className="h-4 w-4 text-slate-300" aria-hidden />
           </NavLink>
           <span className="hidden sm:inline text-sm text-slate-400">
             {user?.displayName}
@@ -78,7 +90,9 @@ export function Navbar() {
               <span className="block truncate text-sm font-medium">{user?.displayName}</span>
               <span className="block text-xs text-slate-500">Ver perfil</span>
             </span>
-            <span className="text-slate-500">›</span>
+            <span className="text-slate-500" aria-hidden>
+              ›
+            </span>
           </NavLink>
         </div>
         <div className="flex gap-1 overflow-x-auto px-2 pb-2 lg:hidden">

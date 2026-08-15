@@ -134,26 +134,20 @@ export function Dashboard() {
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {exercises.map((ex, index) => (
+            {exercises.map((ex) => (
               <Link
                 key={ex.id}
                 to={`/sessions/run/${ex.id}`}
-                className="group flex items-center gap-3 rounded-xl border border-slate-800/80 bg-[#0d1526] p-3 transition hover:border-violet-500/60 hover:bg-[#111b31]"
+                className="group block rounded-xl border border-slate-800/80 bg-[#0d1526] p-4 transition hover:border-violet-500/60 hover:bg-[#111b31]"
               >
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg ${routineColors[index % routineColors.length]}`}>
-                  {routineIcons[index % routineIcons.length]}
+                <div className="truncate font-medium group-hover:text-white">{ex.name}</div>
+                <div className="mt-1 text-xs text-slate-400">
+                  {ex.sets} juegos ·{' '}
+                  {ex.type === 'TIME' || ex.type === 'MIXED'
+                    ? `${ex.durationPerSetSec ?? 0}s`
+                    : `${ex.repsPerSet ?? 0} reps`}
+                  {ex.restSec ? ` · Descanso ${ex.restSec}s` : ''}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium group-hover:text-white">{ex.name}</div>
-                  <div className="mt-1 text-xs text-slate-400">
-                    {ex.sets} juegos ·{' '}
-                    {ex.type === 'TIME' || ex.type === 'MIXED'
-                      ? `${ex.durationPerSetSec ?? 0}s`
-                      : `${ex.repsPerSet ?? 0} reps`}
-                    {ex.restSec ? ` · Descanso ${ex.restSec}s` : ''}
-                  </div>
-                </div>
-                <span className="px-1 text-lg text-slate-500">⋮</span>
               </Link>
             ))}
           </div>
@@ -173,15 +167,6 @@ export function Dashboard() {
   );
 }
 
-const routineIcons = ['♜', '◖', '✣', '◒', '♜', '◈'];
-const routineColors = [
-  'bg-violet-500/20 text-violet-400',
-  'bg-rose-500/20 text-rose-400',
-  'bg-emerald-500/20 text-emerald-400',
-  'bg-orange-500/20 text-orange-400',
-  'bg-indigo-500/20 text-indigo-400',
-  'bg-sky-500/20 text-sky-400',
-];
 
 function MetricCard({
   label,
