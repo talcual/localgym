@@ -32,6 +32,8 @@ interface OllamaUpstreamOptions {
   baseUrl: string;
   model: string;
   body: Record<string, unknown>;
+  /** Headers extra (p.ej. Authorization para Ollama Cloud). */
+  headers?: Record<string, string>;
   signal?: AbortSignal;
 }
 
@@ -45,10 +47,32 @@ export class OllamaService {
   private readonly defaultModel =
     process.env.OLLAMA_MODEL || 'llama3.1';
 
+  /**
+   * API key para Ollama Cloud. Si está presente se envía
+   * `Authorization: Bearer <key>` en cada request upstream.
+   *
+   * En Ollama local (sin auth) se ignora y el header no se agrega.
+   */
+  private readonly apiKey = (process.env.OLLAMA_API_KEY || '').trim();
+
   /** Timeout del request upstream hacia Ollama (ms). 0 = sin timeout. */
   private readonly upstreamTimeoutMs = Number(
     process.env.OLLAMA_UPSTREAM_TIMEOUT_MS || 0,
   );
+
+  /**
+   * Construye los headers HTTP que enviaremos a Ollama. Si hay API key
+   * configurada (Ollama Cloud) se agrega `Authorization: Bearer <key>`.
+   */
+  private buildUpstreamHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    return headers;
+  }
 
   /**
    * Construye un Readable que emite los eventos SSE listos para enviar al
@@ -70,8 +94,12 @@ export class OllamaService {
 
     const { endpoint, body } = this.buildRequest(model, dto);
     const url = `${baseUrl}${endpoint}`;
+    const headers = this.buildUpstreamHeaders();
 
-    return this.makeUpstreamStream({ baseUrl, model, body, signal }, url);
+    return this.makeUpstreamStream(
+      { baseUrl, model, body, headers, signal },
+      url,
+    );
   }
 
   /** Versión no-stream: útil para tests o health checks. */
@@ -86,6 +114,7 @@ export class OllamaService {
     try {
       const res = await fetch(`${baseUrl}/api/tags`, {
         signal: ctrl.signal,
+        headers: this.buildUpstreamHeaders(),
       });
       if (!res.ok) {
         throw new ServiceUnavailableException(
@@ -203,15 +232,18 @@ export class OllamaService {
       try {
         upstream = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: opts.headers ?? { 'Content-Type': 'application/json' },
           body: JSON.stringify(opts.body),
           signal,
         });
 
         if (!upstream.ok || !upstream.body) {
           const text = await upstream.text().catch(() => '');
+          // Por seguridad, removemos cualquier header sensible del cuerpo
+          // por si el upstream incluyera un echo del request.
+          const sanitized = this.sanitizeErrorBody(text);
           throw new Error(
-            `Ollama respondió HTTP ${upstream.status}: ${text || 'sin cuerpo'}`,
+            `Ollama respondió HTTP ${upstream.status}: ${sanitized || 'sin cuerpo'}`,
           );
         }
 
@@ -284,5 +316,18 @@ export class OllamaService {
       this.logger.warn(`Línea no parseable de Ollama: ${(err as Error).message}`);
       return null;
     }
+  }
+
+  /**
+   * Limpia el cuerpo de error devuelto por el upstream para no filtrar
+   * accidentalmente el API key si el proxy lo reenviara en algún campo.
+   */
+  private sanitizeErrorBody(body: string): string {
+    if (!body) return '';
+    if (!this.apiKey) return body;
+    return body
+      .split(this.apiKey)
+      .join('[REDACTED]')
+      .replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]');
   }
 }
