@@ -41,6 +41,15 @@ export interface Exercise {
   updatedAt: string;
 }
 
+/**
+ * Ejercicio enriquecido con el conteo de rutinas en las que aparece.
+ * Solo lo devuelve `exercisesApi.list()`. Los ejercicios sin rutinas
+ * asociadas son "libres" (routineCount === 0).
+ */
+export interface ExerciseWithRoutineCount extends Exercise {
+  routineCount: number;
+}
+
 export interface SessionLog {
   id: string;
   userId: string;

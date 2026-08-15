@@ -28,11 +28,18 @@ export const usersApi = {
     api.patch<UserProfile>('/users/me', data).then((r) => r.data),
 };
 
+import type { ExerciseWithRoutineCount } from './types';
+
 export const exercisesApi = {
-  list: () => api.get<Exercise[]>('/exercises').then((r) => r.data),
-  /** Solo los ejercicios creados manualmente (excluye los importados por AI). */
+  /** Todos los ejercicios del usuario con su conteo de rutinas. */
+  list: () =>
+    api.get<ExerciseWithRoutineCount[]>('/exercises').then((r) => r.data),
+  /** Solo los ejercicios que NO están asociados a ninguna rutina. */
+  listFree: () =>
+    api.get<ExerciseWithRoutineCount[]>('/exercises/free').then((r) => r.data),
+  /** Solo los ejercicios creados manualmente por el usuario. */
   listManual: () => api.get<Exercise[]>('/exercises/manual').then((r) => r.data),
-  /** Solo los ejercicios importados desde el catálogo (AI Couch). */
+  /** Solo los ejercicios importados del catálogo (AI Couch). */
   listImported: () =>
     api.get<Exercise[]>('/exercises/imported').then((r) => r.data),
   get: (id: string) => api.get<Exercise>(`/exercises/${id}`).then((r) => r.data),
@@ -115,6 +122,7 @@ export type {
   DailyCount,
   Exercise,
   ExerciseSource,
+  ExerciseWithRoutineCount,
   ExerciseAggregate,
   ProgressSummary,
   SessionLog,

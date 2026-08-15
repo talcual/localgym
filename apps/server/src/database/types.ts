@@ -34,6 +34,14 @@ export interface Exercise {
   updatedAt: string;
 }
 
+/**
+ * Ejercicio enriquecido con el conteo de rutinas en las que aparece.
+ * `routineCount === 0` → ejercicio libre (no asociado a ninguna rutina).
+ */
+export interface ExerciseWithRoutineCount extends Exercise {
+  routineCount: number;
+}
+
 export interface SessionLog {
   id: string;
   userId: string;

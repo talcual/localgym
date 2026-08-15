@@ -26,13 +26,23 @@ export class ExercisesController {
   }
 
   /**
-   * Lista sólo los ejercicios creados manualmente por el usuario
+   * Lista los ejercicios que NO están asociados a ninguna rutina
+   * (ejercicios "libres", creados manualmente y todavía no usados).
+   */
+  @Get('free')
+  listFree(@CurrentUser() current: { userId: string }) {
+    return this.exercisesService.listFree(current.userId);
+  }
+
+  /**
+   * Lista solo los ejercicios creados manualmente por el usuario
    * (excluye los importados por AI Couch / catálogo).
    */
   @Get('manual')
   listManual(@CurrentUser() current: { userId: string }) {
     return this.exercisesService.listManual(current.userId);
   }
+
   /**
    * Lista solo los ejercicios importados desde el catálogo
    * (los que llegaron vía AI Couch o import manual del catálogo).
@@ -41,6 +51,7 @@ export class ExercisesController {
   listImported(@CurrentUser() current: { userId: string }) {
     return this.exercisesService.listImported(current.userId);
   }
+
   @Get(':id')
   findOne(
     @CurrentUser() current: { userId: string },

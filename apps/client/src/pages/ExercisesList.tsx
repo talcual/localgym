@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { exercisesApi } from '../api';
-import type { Exercise, ExerciseType } from '../api/types';
+import type {
+  ExerciseType,
+  ExerciseWithRoutineCount,
+} from '../api/types';
 
 type TypeFilter = 'all' | ExerciseType;
+type View = 'all' | 'free' | 'in_routine';
 
 export function ExercisesList() {
   const navigate = useNavigate();
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [exercises, setExercises] = useState<ExerciseWithRoutineCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [type, setType] = useState<TypeFilter>('all');
+  const [view, setView] = useState<View>('free');
 
   function load() {
-    // Endpoint dedicado: solo los creados manualmente por el usuario.
     exercisesApi
-      .listManual()
+      .list()
       .then(setExercises)
       .finally(() => setLoading(false));
   }
@@ -28,14 +32,34 @@ export function ExercisesList() {
     setExercises((prev) => prev.filter((e) => e.id !== id));
   }
 
+  const counts = useMemo(() => {
+    let free = 0;
+    let inRoutine = 0;
+    for (const e of exercises) {
+      if (e.routineCount === 0) free++;
+      else inRoutine++;
+    }
+    return { free, inRoutine, all: exercises.length };
+  }, [exercises]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return exercises.filter((e) => {
-      if (type !== 'all' && e.type !== type) return false;
-      if (!q) return true;
-      return e.name.toLowerCase().includes(q);
-    });
-  }, [exercises, search, type]);
+    return exercises
+      .filter((e) => {
+        if (view === 'free' && e.routineCount > 0) return false;
+        if (view === 'in_routine' && e.routineCount === 0) return false;
+        if (type !== 'all' && e.type !== type) return false;
+        if (!q) return true;
+        return e.name.toLowerCase().includes(q);
+      })
+      .sort((a, b) => {
+        // Libres primero, luego los de rutina por cantidad de rutinas desc.
+        if (view !== 'all') return 0;
+        if (a.routineCount === 0 && b.routineCount > 0) return -1;
+        if (a.routineCount > 0 && b.routineCount === 0) return 1;
+        return b.routineCount - a.routineCount;
+      });
+  }, [exercises, view, type, search]);
 
   const totalCount = exercises.length;
   const shownCount = filtered.length;
@@ -46,11 +70,11 @@ export function ExercisesList() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-semibold">Ejercicios propios</h1>
+          <h1 className="text-2xl font-semibold">Ejercicios</h1>
           <p className="mt-1 text-xs text-slate-400">
             {totalCount === 0
-              ? 'Aún no tienes ejercicios creados.'
-              : `${shownCount} de ${totalCount} mostrados`}
+              ? 'Aún no tienes ejercicios.'
+              : `${counts.free} libres · ${counts.inRoutine} en rutinas`}
           </p>
         </div>
         <Link
@@ -59,6 +83,32 @@ export function ExercisesList() {
         >
           + Nuevo ejercicio
         </Link>
+      </div>
+
+      {/* Tabs: Libres / De rutina */}
+      <div
+        role="tablist"
+        aria-label="Filtrar por uso en rutinas"
+        className="inline-flex flex-wrap rounded-md border border-slate-800 bg-[#091121] p-0.5"
+      >
+        <TabButton
+          active={view === 'free'}
+          onClick={() => setView('free')}
+          label="Libres"
+          count={counts.free}
+        />
+        <TabButton
+          active={view === 'in_routine'}
+          onClick={() => setView('in_routine')}
+          label="De rutina"
+          count={counts.inRoutine}
+        />
+        <TabButton
+          active={view === 'all'}
+          onClick={() => setView('all')}
+          label="Todos"
+          count={counts.all}
+        />
       </div>
 
       {/* Filtros */}
@@ -97,60 +147,148 @@ export function ExercisesList() {
         </div>
       ) : shownCount === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-          Ningún ejercicio coincide con los filtros.
+          {view === 'free'
+            ? 'No tienes ejercicios libres. Todos están asociados a alguna rutina.'
+            : view === 'in_routine'
+              ? 'Aún no tienes ejercicios asociados a rutinas. Genera una con AI Couch.'
+              : 'Ningun ejercicio coincide con los filtros.'}
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
           {filtered.map((ex) => (
-            <div
+            <ExerciseCard
               key={ex.id}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-4"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <SourceBadge source={ex.source} />
-                    <div className="truncate font-medium">{ex.name}</div>
-                  </div>
-                  <div className="text-sm text-slate-400 mt-1">
-                    {ex.sets} juegos · {labelType(ex.type)} ·{' '}
-                    {ex.durationPerSetSec ? `${ex.durationPerSetSec}s` : ''}{' '}
-                    {ex.repsPerSet ? `${ex.repsPerSet} reps` : ''}
-                    {ex.restSec ? ` · descanso ${ex.restSec}s` : ''}
-                  </div>
-                  {ex.notes && (
-                    <div className="text-sm text-slate-500 mt-2">
-                      {ex.notes}
-                    </div>
-                  )}
-                </div>
-                <TypeBadge type={ex.type} />
-              </div>
-              <div className="flex items-center gap-2 mt-4">
-                <button
-                  onClick={() => navigate(`/sessions/run/${ex.id}`)}
-                  className="bg-brand-600 hover:bg-brand-500 px-3 py-1.5 rounded-md text-sm"
-                >
-                  Entrenar
-                </button>
-                <button
-                  onClick={() => navigate(`/exercises/${ex.id}/edit`)}
-                  className="bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-md text-sm"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => onDelete(ex.id)}
-                  className="bg-slate-800 hover:bg-red-900 px-3 py-1.5 rounded-md text-sm text-red-300"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </div>
+              exercise={ex}
+              onDelete={() => onDelete(ex.id)}
+              onTrain={() => navigate(`/sessions/run/${ex.id}`)}
+              onEdit={() => navigate(`/exercises/${ex.id}/edit`)}
+            />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function ExerciseCard({
+  exercise: ex,
+  onTrain,
+  onEdit,
+  onDelete,
+}: {
+  exercise: ExerciseWithRoutineCount;
+  onTrain: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const isFree = ex.routineCount === 0;
+  return (
+    <div
+      className={
+        'bg-slate-900 border rounded-xl p-4 ' +
+        (isFree ? 'border-slate-800' : 'border-violet-700/40')
+      }
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <UsageBadge routineCount={ex.routineCount} />
+            <div className="truncate font-medium">{ex.name}</div>
+          </div>
+          <div className="text-sm text-slate-400 mt-1">
+            {ex.sets} juegos · {labelType(ex.type)} ·{' '}
+            {ex.durationPerSetSec ? `${ex.durationPerSetSec}s` : ''}{' '}
+            {ex.repsPerSet ? `${ex.repsPerSet} reps` : ''}
+            {ex.restSec ? ` · descanso ${ex.restSec}s` : ''}
+          </div>
+          {ex.notes && (
+            <div className="text-sm text-slate-500 mt-2">{ex.notes}</div>
+          )}
+        </div>
+        <TypeBadge type={ex.type} />
+      </div>
+      <div className="flex items-center gap-2 mt-4">
+        <button
+          onClick={onTrain}
+          className="bg-brand-600 hover:bg-brand-500 px-3 py-1.5 rounded-md text-sm"
+        >
+          Entrenar
+        </button>
+        <button
+          onClick={onEdit}
+          className="bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-md text-sm"
+        >
+          Editar
+        </button>
+        {isFree && (
+          <button
+            onClick={onDelete}
+            className="bg-slate-800 hover:bg-red-900 px-3 py-1.5 rounded-md text-sm text-red-300"
+            title="Solo puedes borrar ejercicios libres"
+          >
+            Eliminar
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={
+        'inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition ' +
+        (active
+          ? 'bg-violet-600 text-white'
+          : 'text-slate-300 hover:text-white')
+      }
+    >
+      <span>{label}</span>
+      <span
+        className={
+          'rounded-full px-1.5 text-[10px] ' +
+          (active ? 'bg-white/15' : 'bg-slate-800')
+        }
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function UsageBadge({ routineCount }: { routineCount: number }) {
+  if (routineCount === 0) {
+    return (
+      <span
+        className="shrink-0 rounded-full bg-slate-700 px-2 py-0.5 text-[10px] font-medium text-slate-200"
+        title="No está asociado a ninguna rutina"
+      >
+        Libre
+      </span>
+    );
+  }
+  return (
+    <span
+      className="shrink-0 rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-200"
+      title={`Asociado a ${routineCount} rutina${routineCount === 1 ? '' : 's'}`}
+    >
+      {routineCount === 1 ? '1 rutina' : `${routineCount} rutinas`}
+    </span>
   );
 }
 
@@ -208,28 +346,6 @@ function TypeBadge({ type }: { type: ExerciseType }) {
     <span
       className={
         'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ' + v.cls
-      }
-    >
-      {v.label}
-    </span>
-  );
-}
-
-function SourceBadge({ source }: { source: Exercise['source'] }) {
-  const map = {
-    manual: { label: 'Propio', cls: 'bg-slate-700 text-slate-200' },
-    ai_import: { label: 'AI', cls: 'bg-violet-500/20 text-violet-200' },
-  } as const;
-  const v = map[source];
-  return (
-    <span
-      className={
-        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ' + v.cls
-      }
-      title={
-        source === 'ai_import'
-          ? 'Importado del catálogo por AI Couch'
-          : 'Creado manualmente'
       }
     >
       {v.label}

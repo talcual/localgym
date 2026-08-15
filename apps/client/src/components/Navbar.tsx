@@ -1,7 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
-  Bot,
   Calendar,
   CalendarDays,
   Dumbbell,
@@ -27,7 +26,6 @@ const navigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
   ['Inicio', '/app', Home],
   ['Mis rutinas', '/routines', ListChecks],
   ['Ejercicios', '/exercises', Dumbbell],
-  ['Importados', '/exercises/imported', Bot],
   ['Catálogo', '/catalog', Library],
   ['Historial', '/sessions', Calendar],
   ['Calendario', '/calendar', CalendarDays],

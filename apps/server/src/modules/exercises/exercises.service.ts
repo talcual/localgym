@@ -8,7 +8,12 @@ import { Client } from '@libsql/client';
 import { v4 as uuid } from 'uuid';
 
 import { DATABASE } from '../../database/database.tokens';
-import { Exercise, ExerciseSource, ExerciseType } from '../../database/types';
+import {
+  Exercise,
+  ExerciseSource,
+  ExerciseType,
+  ExerciseWithRoutineCount,
+} from '../../database/types';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
 
@@ -16,12 +21,49 @@ import { UpdateExerciseDto } from './dto/update-exercise.dto';
 export class ExercisesService {
   constructor(@Inject(DATABASE) private readonly db: Client) {}
 
-  async list(userId: string): Promise<Exercise[]> {
+  /**
+   * Lista todos los ejercicios del usuario con el conteo de rutinas en las
+   * que aparecen. `routineCount === 0` indica "ejercicio libre".
+   */
+  async list(userId: string): Promise<ExerciseWithRoutineCount[]> {
     const res = await this.db.execute({
-      sql: 'SELECT * FROM exercises WHERE user_id = ? ORDER BY created_at DESC',
-      args: [userId],
+      sql: `
+        SELECT e.*, COUNT(ri.id) AS routine_count
+        FROM exercises e
+        LEFT JOIN routine_items ri
+          ON ri.exercise_id = e.id
+          AND ri.routine_id IN (
+            SELECT id FROM routines WHERE user_id = ?
+          )
+        WHERE e.user_id = ?
+        GROUP BY e.id
+        ORDER BY e.created_at DESC
+      `,
+      args: [userId, userId],
     });
-    return res.rows.map(mapExercise);
+    return res.rows.map(mapExerciseWithCount);
+  }
+
+  /**
+   * Lista solo los ejercicios que NO están asociados a ninguna rutina
+   * (ejercicios "libres").
+   */
+  async listFree(userId: string): Promise<ExerciseWithRoutineCount[]> {
+    const res = await this.db.execute({
+      sql: `
+        SELECT e.*, 0 AS routine_count
+        FROM exercises e
+        WHERE e.user_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM routine_items ri
+            JOIN routines r ON r.id = ri.routine_id
+            WHERE ri.exercise_id = e.id AND r.user_id = ?
+          )
+        ORDER BY e.created_at DESC
+      `,
+      args: [userId, userId],
+    });
+    return res.rows.map(mapExerciseWithCount);
   }
 
   /**
@@ -152,5 +194,12 @@ function mapExercise(row: any): Exercise {
     source,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
+  };
+}
+
+function mapExerciseWithCount(row: any): ExerciseWithRoutineCount {
+  return {
+    ...mapExercise(row),
+    routineCount: Number(row.routine_count ?? 0),
   };
 }
