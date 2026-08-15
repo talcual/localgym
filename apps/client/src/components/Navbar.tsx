@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
   Calendar,
+  CalendarDays,
   Dumbbell,
   Home,
   Library,
@@ -27,10 +28,10 @@ const navigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
   ['Ejercicios', '/exercises', Dumbbell],
   ['Catálogo', '/catalog', Library],
   ['Historial', '/sessions', Calendar],
+  ['Calendario', '/calendar', CalendarDays],
   ['Progreso', '/progress', LineChart],
   ['Stats', '/stats', BarChart3],
-  ['Calendario', '/sessions', Calendar],
-  ['Objetivos', '/progress', Target],
+  ['Objetivos', '/goals', Target],
   ['Ajustes', '/profile', SettingsIcon],
 ];
 

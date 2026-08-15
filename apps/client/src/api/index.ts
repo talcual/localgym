@@ -101,3 +101,23 @@ export type {
   CreateRoutineInput,
   UpdateRoutineInput,
 } from './routines';
+
+export type {
+  AuthResponse,
+  BodyMeasurement,
+  BmiHistoryPoint,
+  CatalogExercise,
+  DailyCount,
+  Exercise,
+  ExerciseAggregate,
+  ProgressSummary,
+  SessionLog,
+  SummaryStats,
+  UserProfile,
+  WeightEntry,
+  AuthUser,
+  BmiInfo,
+  BmiCategory,
+  Sex,
+  ExerciseType,
+} from './types';

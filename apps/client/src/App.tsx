@@ -16,6 +16,8 @@ import { Weight } from './pages/Weight';
 import { Measurements } from './pages/Measurements';
 import { Progress } from './pages/Progress';
 import { Routines } from './pages/Routines';
+import { Calendar } from './pages/Calendar';
+import { Goals } from './pages/Goals';
 import { useAuth } from './auth/AuthContext';
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -169,6 +171,26 @@ export function App() {
           <ProtectedRoute>
             <Shell>
               <Routines />
+            </Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/calendar"
+        element={
+          <ProtectedRoute>
+            <Shell>
+              <Calendar />
+            </Shell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/goals"
+        element={
+          <ProtectedRoute>
+            <Shell>
+              <Goals />
             </Shell>
           </ProtectedRoute>
         }

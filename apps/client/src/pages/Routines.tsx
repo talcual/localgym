@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
-import { routinesApi } from '../api';
-import type { RoutineWithItems } from '../api';
+import { Sparkles, Play } from 'lucide-react';
+import { routinesApi, exercisesApi } from '../api';
+import type { Exercise, RoutineWithItems } from '../api';
 import {
   groupRoutineItemsByDay,
   routineGoalLabel,
@@ -17,15 +17,23 @@ export function Routines() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [exerciseMap, setExerciseMap] = useState<Map<string, Exercise>>(
+    new Map(),
+  );
+
   const refresh = useCallback(async () => {
     setError(null);
     try {
-      const [list, active] = await Promise.all([
+      const [list, active, exercises] = await Promise.all([
         routinesApi.list(),
         routinesApi.active(),
+        exercisesApi.list(),
       ]);
       setRoutines(list);
       setActiveRoutineId(active?.id ?? null);
+      const m = new Map<string, Exercise>();
+      for (const e of exercises) m.set(e.id, e);
+      setExerciseMap(m);
     } catch (err) {
       setError((err as Error).message || 'No se pudieron cargar las rutinas.');
     } finally {
@@ -68,22 +76,21 @@ export function Routines() {
     }
   }
 
-  function startTraining(routine: RoutineWithItems) {
-    // Toma el primer item con exerciseId del primer día y abre el SessionRunner.
+  function startDay(routine: RoutineWithItems, dayIndex: number) {
     const days = groupRoutineItemsByDay(routine.items);
-    for (const day of days) {
-      for (const it of day.items) {
-        if (it.exerciseId) {
-          navigate(`/sessions/run/${it.exerciseId}`);
-          return;
-        }
-      }
+    const day = days.find((d) => d.dayIndex === dayIndex);
+    if (!day) {
+      setError('Ese día no tiene ejercicios en esta rutina.');
+      return;
     }
-    // Si la rutina no tiene ejercicios importables todavía, abrimos el
-    // dashboard para que el usuario sepa qué pasó.
-    setError(
-      'Esta rutina no tiene ejercicios para entrenar todavía. Importá o creá los ejercicios.',
-    );
+    const firstWithExercise = day.items.find((it) => it.exerciseId);
+    if (!firstWithExercise || !firstWithExercise.exerciseId) {
+      setError(
+        'Este día no tiene ejercicios importados todavía. Probá con otro día.',
+      );
+      return;
+    }
+    navigate(`/sessions/run/${firstWithExercise.exerciseId}`);
   }
 
   const activeRoutine = useMemo(
@@ -102,8 +109,7 @@ export function Routines() {
           Mis rutinas
         </h1>
         <p className="mt-1 text-sm text-slate-400">
-          Activá una sola por vez. La semana que viene podés cambiar a otra sin
-          perder el historial.
+          Activá una sola por vez. Empezá cada sesión por el día que te toque.
         </p>
       </div>
 
@@ -114,41 +120,17 @@ export function Routines() {
       )}
 
       {activeRoutine && (
-        <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/10 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
-                  Activa esta semana
-                </span>
-                <h2 className="font-semibold">{activeRoutine.title}</h2>
-              </div>
-              <p className="mt-1 text-xs text-slate-400">
-                {routineGoalLabel(activeRoutine.goal)} ·{' '}
-                {routineLevelLabel(activeRoutine.level)} ·{' '}
-                {activeRoutine.daysPerWeek} días
-              </p>
-              <DaysOverview routine={activeRoutine} />
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => startTraining(activeRoutine)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium shadow-lg shadow-emerald-950/30 transition hover:bg-emerald-500"
-              >
-                Empezar
-              </button>
-              <button
-                type="button"
-                onClick={deactivate}
-                disabled={busyId !== null}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-amber-500 hover:text-amber-200 disabled:opacity-50"
-              >
-                {busyId === '__deactivate' ? '…' : 'Desactivar'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <RoutineCard
+          routine={activeRoutine}
+          exerciseMap={exerciseMap}
+          isActive
+          busyId={busyId}
+          onActivate={activate}
+          onDeactivate={deactivate}
+          onRemove={remove}
+          onStartDay={startDay}
+          highlight
+        />
       )}
 
       {routines.length === 0 ? (
@@ -162,113 +144,227 @@ export function Routines() {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {routines.map((r) => {
-            const days = groupRoutineItemsByDay(r.items);
-            const isActive = r.id === activeRoutineId;
-            return (
-              <div
+          {routines
+            .filter((r) => r.id !== activeRoutineId)
+            .map((r) => (
+              <RoutineCard
                 key={r.id}
-                className={
-                  'flex flex-col rounded-xl border bg-[#0d1526] p-4 ' +
-                  (isActive
-                    ? 'border-emerald-500/50'
-                    : 'border-slate-800/80')
-                }
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-base font-semibold">
-                      {r.title}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-slate-400">
-                      {routineGoalLabel(r.goal)} ·{' '}
-                      {routineLevelLabel(r.level)} · {r.daysPerWeek} días
-                    </div>
-                  </div>
-                  {isActive && (
-                    <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                      Activa
-                    </span>
-                  )}
-                </div>
-
-                <DaysOverview routine={r} compact />
-
-                <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => startTraining(r)}
-                    disabled={!isActive || r.items.length === 0}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Entrenar
-                  </button>
-                  {isActive ? (
-                    <button
-                      type="button"
-                      onClick={deactivate}
-                      disabled={busyId !== null}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-amber-500 hover:text-amber-200 disabled:opacity-50"
-                    >
-                      {busyId === '__deactivate' ? '…' : 'Desactivar'}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => activate(r.id)}
-                      disabled={busyId !== null}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-violet-500 hover:text-white disabled:opacity-50"
-                    >
-                      {busyId === r.id ? '…' : 'Activar'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => remove(r.id)}
-                    disabled={busyId !== null}
-                    title="Borrar rutina"
-                    className="inline-flex items-center justify-center rounded-lg border border-slate-700 px-2 py-1.5 text-xs text-slate-300 hover:border-rose-500 hover:text-rose-300 disabled:opacity-50"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+                routine={r}
+                exerciseMap={exerciseMap}
+                isActive={false}
+                busyId={busyId}
+                onActivate={activate}
+                onDeactivate={deactivate}
+                onRemove={remove}
+                onStartDay={startDay}
+              />
+            ))}
         </div>
       )}
     </div>
   );
 }
 
-function DaysOverview({
+function RoutineCard({
   routine,
-  compact,
+  exerciseMap,
+  isActive,
+  busyId,
+  onActivate,
+  onDeactivate,
+  onRemove,
+  onStartDay,
+  highlight,
 }: {
   routine: RoutineWithItems;
-  compact?: boolean;
+  exerciseMap: Map<string, Exercise>;
+  isActive: boolean;
+  busyId: string | null;
+  onActivate: (id: string) => void | Promise<void>;
+  onDeactivate: () => void | Promise<void>;
+  onRemove: (id: string) => void | Promise<void>;
+  onStartDay: (routine: RoutineWithItems, dayIndex: number) => void;
+  highlight?: boolean;
 }) {
-  const days = groupRoutineItemsByDay(routine.items);
-  if (days.length === 0) {
-    return (
-      <p className="mt-2 text-xs text-slate-500">Sin ejercicios cargados.</p>
-    );
-  }
+  const days = useMemo(() => groupRoutineItemsByDay(routine.items), [routine]);
+  const [selectedDay, setSelectedDay] = useState<number>(0);
+
+  useEffect(() => {
+    if (!days.find((d) => d.dayIndex === selectedDay)) {
+      setSelectedDay(days[0]?.dayIndex ?? 0);
+    }
+  }, [days, selectedDay]);
+
+  const currentDay = days.find((d) => d.dayIndex === selectedDay) ?? days[0];
+
   return (
-    <ul className={'mt-3 space-y-1.5 ' + (compact ? 'text-xs' : 'text-sm')}>
-      {days.slice(0, compact ? 4 : routine.daysPerWeek).map((d) => (
-        <li key={d.dayIndex} className="text-slate-300">
-          <span className="font-medium">{d.dayLabel}:</span>{' '}
-          <span className="text-slate-400">
-            {d.items.length} ejercicio{d.items.length === 1 ? '' : 's'}
+    <div
+      className={
+        'flex flex-col rounded-xl border p-4 ' +
+        (highlight
+          ? 'border-emerald-500/40 bg-emerald-950/10 lg:col-span-3 xl:col-span-3'
+          : isActive
+            ? 'border-emerald-500/50 bg-[#0d1526]'
+            : 'border-slate-800/80 bg-[#0d1526]')
+      }
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            {highlight && (
+              <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
+                Activa esta semana
+              </span>
+            )}
+            <h2 className="truncate text-base font-semibold">{routine.title}</h2>
+          </div>
+          <div className="mt-0.5 text-[11px] text-slate-400">
+            {routineGoalLabel(routine.goal)} ·{' '}
+            {routineLevelLabel(routine.level)} · {routine.daysPerWeek} días
+          </div>
+        </div>
+        {isActive && !highlight && (
+          <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+            Activa
           </span>
-        </li>
-      ))}
-      {compact && days.length > 4 && (
-        <li className="text-[11px] text-slate-500">
-          +{days.length - 4} día(s) más
-        </li>
+        )}
+      </div>
+
+      {days.length > 0 && (
+        <div className="mt-3">
+          <div className="flex flex-wrap gap-1.5">
+            {days.map((d) => {
+              const isSelected = d.dayIndex === selectedDay;
+              const hasExercise = d.items.some((it) => it.exerciseId);
+              return (
+                <button
+                  key={d.dayIndex}
+                  type="button"
+                  onClick={() => setSelectedDay(d.dayIndex)}
+                  className={
+                    'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition ' +
+                    (isSelected
+                      ? 'border-violet-500 bg-violet-600/20 text-violet-100'
+                      : hasExercise
+                        ? 'border-slate-700 text-slate-200 hover:border-violet-500 hover:text-white'
+                        : 'border-slate-800 text-slate-500 hover:border-slate-700')
+                  }
+                  title={d.dayLabel}
+                >
+                  <span className="font-semibold">D{d.dayIndex + 1}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {currentDay && (
+            <div className="mt-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium text-slate-200">
+                  {currentDay.dayLabel}
+                </div>
+                <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                  {currentDay.items.length} ejercicio
+                  {currentDay.items.length === 1 ? '' : 's'}
+                </div>
+              </div>
+              <ul className="mt-2 space-y-1.5 text-xs">
+                {currentDay.items.map((it) => {
+                  const ex = it.exerciseId
+                    ? exerciseMap.get(it.exerciseId)
+                    : undefined;
+                  const name = ex?.name ?? 'Ejercicio';
+                  const meta = describeItemMeta(it, ex);
+                  return (
+                    <li
+                      key={it.id}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate text-slate-200">{name}</span>
+                      <span className="shrink-0 text-[11px] text-slate-500">
+                        {meta}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onStartDay(routine, currentDay.dayIndex)}
+                  disabled={
+                    !currentDay.items.some((it) => it.exerciseId) ||
+                    !isActive
+                  }
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={
+                    !isActive
+                      ? 'Activá la rutina para poder entrenar'
+                      : !currentDay.items.some((it) => it.exerciseId)
+                        ? 'Este día no tiene ejercicios importables'
+                        : 'Entrenar este día'
+                  }
+                >
+                  <Play className="h-3.5 w-3.5" aria-hidden />
+                  Entrenar este día
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
-    </ul>
+
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
+        {isActive ? (
+          <button
+            type="button"
+            onClick={onDeactivate}
+            disabled={busyId !== null}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-amber-500 hover:text-amber-200 disabled:opacity-50"
+          >
+            {busyId === '__deactivate' ? '…' : 'Desactivar'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onActivate(routine.id)}
+            disabled={busyId !== null}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-violet-500 hover:text-white disabled:opacity-50"
+          >
+            {busyId === routine.id ? '…' : 'Activar'}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onRemove(routine.id)}
+          disabled={busyId !== null}
+          title="Borrar rutina"
+          className="inline-flex items-center justify-center rounded-lg border border-slate-700 px-2 py-1.5 text-xs text-slate-300 hover:border-rose-500 hover:text-rose-300 disabled:opacity-50"
+        >
+          ×
+        </button>
+      </div>
+    </div>
   );
+}
+
+function describeItemMeta(
+  it: {
+    sets: number | null;
+    reps: number | null;
+    durationPerSetSec: number | null;
+    restSec: number | null;
+  },
+  ex?: Exercise,
+): string {
+  const sets = it.sets ?? ex?.sets ?? null;
+  const reps = it.reps ?? ex?.repsPerSet ?? null;
+  const dur = it.durationPerSetSec ?? ex?.durationPerSetSec ?? null;
+  const rest = it.restSec ?? ex?.restSec ?? null;
+  const parts: string[] = [];
+  if (sets != null && reps != null) parts.push(`${sets}x${reps}`);
+  else if (sets != null && dur != null) parts.push(`${sets}x${dur}s`);
+  else if (sets != null) parts.push(`${sets} series`);
+  if (rest != null) parts.push(`descanso ${rest}s`);
+  return parts.join(' · ') || '—';
 }
