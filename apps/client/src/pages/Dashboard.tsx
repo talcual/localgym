@@ -310,7 +310,16 @@ function AiFitnessCard({
       });
       const parsed = parseRoutineStructured(raw, days);
       if (!parsed) {
-        throw new Error('La IA no devolvió un plan estructurado válido.');
+        const preview = (() => {
+          try {
+            return JSON.stringify(raw).slice(0, 300);
+          } catch {
+            return String(raw).slice(0, 300);
+          }
+        })();
+        throw new Error(
+          `La IA no devolvió un plan estructurado válido. Respuesta cruda: ${preview}`,
+        );
       }
 
       // 2) Aseguramos que los ejercicios referenciados existan como
@@ -682,41 +691,118 @@ interface ParsedRoutine {
 
 /**
  * Convierte el JSON libre del modelo en una estructura normalizada.
- * Acepta dos formas:
+ *
+ * Acepta varias formas comunes que un modelo podría devolver:
  *   A) { title, days: [{ dayIndex, dayLabel, items: [...] }] }
  *   B) { title, items: [{ dayIndex, dayLabel, ... }] }
- * Si el modelo no devolvió `days`, lo infiere de `items` truncando a N días.
+ *   C) { title, routine: [...] }          (alias)
+ *   D) { title, workout: [...] }         (alias)
+ *   E) { title, plan: { days: [...] } }  (alias anidado)
+ *   F) { result: { title, days: [...] } } (wrapper)
+ *   G) { data: { title, days: [...] } }   (wrapper)
+ *
+ * Si no encuentra `title`, intenta `name`/`planTitle`/`routineTitle`.
+ * Si no encuentra items planos, busca recursivamente el primer array de
+ * objetos que tengan `name` o `exerciseName`.
  */
 function parseRoutineStructured(
   raw: unknown,
   requestedDays: number,
 ): ParsedRoutine | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const obj = raw as Record<string, any>;
+  if (raw == null) return null;
 
-  const title = typeof obj.title === 'string' ? obj.title.trim() : '';
-  const summary = typeof obj.summary === 'string' ? obj.summary : undefined;
+  // Si llegó como string (caso raro: backend devolvió JSON.stringify dentro
+  // de un string), intentamos parsearlo.
+  if (typeof raw === 'string') {
+    try {
+      return parseRoutineStructured(JSON.parse(raw), requestedDays);
+    } catch {
+      return null;
+    }
+  }
 
+  if (typeof raw !== 'object') return null;
+
+  // Desenvolver wrappers comunes: { result: ... }, { data: ... }, { plan: ... }
+  let obj: Record<string, any> | null = raw as Record<string, any>;
+  for (let i = 0; i < 3 && obj; i++) {
+    if (typeof obj.title === 'string' || Array.isArray(obj.days) || Array.isArray(obj.items)) break;
+    const next =
+      obj.result ?? obj.data ?? obj.plan ?? obj.routine ?? obj.output ?? obj.response;
+    if (next && typeof next === 'object') obj = next as Record<string, any>;
+    else break;
+  }
+  if (!obj) return null;
+
+  // Title: aceptar varios alias.
+  const titleRaw =
+    obj.title ?? obj.name ?? obj.planTitle ?? obj.routineTitle ?? obj.titulo;
+  const title = typeof titleRaw === 'string' ? titleRaw.trim() : '';
+  const summary =
+    typeof obj.summary === 'string'
+      ? obj.summary
+      : typeof obj.description === 'string'
+        ? obj.description
+        : undefined;
+
+  // Buscar items en distintas formas.
   const flat: ParsedRoutineItem[] = [];
+
+  const collect = (arr: unknown) => {
+    if (!Array.isArray(arr)) return;
+    for (const it of arr) {
+      const norm = normalizeItem(it, 0, '');
+      if (norm) flat.push(norm);
+    }
+  };
+
+  // A) days:[{dayIndex, dayLabel, items:[...]}]
   if (Array.isArray(obj.days)) {
     for (const d of obj.days) {
       if (!d || typeof d !== 'object') continue;
-      const dayIndex = Number(d.dayIndex);
-      const dayLabel = String(d.dayLabel ?? `Día ${dayIndex + 1}`);
-      if (Array.isArray(d.items)) {
-        for (const it of d.items) {
-          const item = normalizeItem(it, dayIndex, dayLabel);
-          if (item) flat.push(item);
+      const dayIndex = Number((d as any).dayIndex ?? (d as any).day ?? (d as any).index);
+      const dayLabel = String(
+        (d as any).dayLabel ?? (d as any).label ?? `Día ${dayIndex + 1}`,
+      );
+      if (Array.isArray((d as any).items)) {
+        for (const it of (d as any).items) {
+          const norm = normalizeItem(it, dayIndex, dayLabel);
+          if (norm) flat.push(norm);
         }
       }
     }
   }
-  if (flat.length === 0 && Array.isArray(obj.items)) {
-    for (const it of obj.items) {
-      const di = Number(it?.dayIndex);
-      const dl = String(it?.dayLabel ?? `Día ${di + 1}`);
-      const item = normalizeItem(it, Number.isFinite(di) ? di : 0, dl);
-      if (item) flat.push(item);
+
+  // B/C/D) items / exercises / workouts a nivel raíz
+  if (flat.length === 0) {
+    collect(obj.items);
+  }
+  if (flat.length === 0) {
+    collect((obj as any).exercises);
+  }
+  if (flat.length === 0) {
+    collect((obj as any).workouts);
+  }
+  if (flat.length === 0) {
+    collect((obj as any).routine);
+  }
+
+  // E) days como objeto único en lugar de array
+  if (flat.length === 0 && obj.days && typeof obj.days === 'object') {
+    const dObj = obj.days as Record<string, any>;
+    let i = 0;
+    for (const key of Object.keys(dObj)) {
+      const d = dObj[key];
+      if (!d || typeof d !== 'object') continue;
+      const items = (d as any).items ?? (d as any).exercises;
+      const dayLabel = String((d as any).label ?? key);
+      if (Array.isArray(items)) {
+        for (const it of items) {
+          const norm = normalizeItem(it, i, dayLabel);
+          if (norm) flat.push(norm);
+        }
+      }
+      i++;
     }
   }
 
@@ -739,21 +825,36 @@ function normalizeItem(
   fallbackDayLabel: string,
 ): ParsedRoutineItem | null {
   if (!it || typeof it !== 'object') return null;
-  const name = typeof it.name === 'string' ? it.name.trim() : '';
+  // Aceptar varios alias de nombre.
+  const nameRaw =
+    it.name ?? it.exerciseName ?? it.exercise ?? it.ejercicio ?? it.title;
+  const name = typeof nameRaw === 'string' ? nameRaw.trim() : '';
   if (!name) return null;
-  const di = Number(it.dayIndex);
-  const dl = String(it.dayLabel ?? fallbackDayLabel);
+
+  const di = Number(it.dayIndex ?? it.day ?? it.index);
+  const dl = String(it.dayLabel ?? it.label ?? fallbackDayLabel);
+
+  // catalogId / exerciseId con alias.
+  const catalogIdRaw =
+    it.catalogId ?? it.catalog_id ?? it.catalogID ?? it.exerciseCatalogId;
+  const exerciseIdRaw =
+    it.exerciseId ?? it.exercise_id ?? it.userExerciseId;
+
   return {
     dayIndex: Number.isFinite(di) ? di : fallbackDayIndex,
     dayLabel: dl || fallbackDayLabel,
     name,
-    catalogId: typeof it.catalogId === 'string' ? it.catalogId : undefined,
-    exerciseId: typeof it.exerciseId === 'string' ? it.exerciseId : undefined,
-    sets: numOrUndef(it.sets),
-    reps: numOrUndef(it.reps),
-    durationPerSetSec: numOrUndef(it.durationPerSetSec),
-    restSec: numOrUndef(it.restSec),
-    notes: typeof it.notes === 'string' ? it.notes : undefined,
+    catalogId: typeof catalogIdRaw === 'string' ? catalogIdRaw : undefined,
+    exerciseId: typeof exerciseIdRaw === 'string' ? exerciseIdRaw : undefined,
+    sets: numOrUndef(it.sets ?? it.series),
+    reps: numOrUndef(it.reps ?? it.repetitions),
+    durationPerSetSec: numOrUndef(it.durationPerSetSec ?? it.duration_sec ?? it.seconds),
+    restSec: numOrUndef(it.restSec ?? it.rest_sec ?? it.rest),
+    notes: typeof it.notes === 'string'
+      ? it.notes
+      : typeof it.note === 'string'
+        ? it.note
+        : undefined,
   };
 }
 
