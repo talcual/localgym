@@ -19,9 +19,9 @@ import { useAuth } from './auth/AuthContext';
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen bg-[#070d1a] text-slate-100 lg:flex">
       <Navbar />
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6">
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-7">
         {children}
       </main>
     </div>
