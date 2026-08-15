@@ -13,6 +13,7 @@ import { WeightModule } from './modules/weight/weight.module';
 import { MeasurementsModule } from './modules/measurements/measurements.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { OllamaModule } from './modules/ollama/ollama.module';
+import { RoutinesModule } from './modules/routines/routines.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { OllamaModule } from './modules/ollama/ollama.module';
     MeasurementsModule,
     ProgressModule,
     OllamaModule,
+    RoutinesModule,
   ],
 })
 export class AppModule {}

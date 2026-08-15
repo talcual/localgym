@@ -134,6 +134,67 @@ export class OllamaService {
     }
   }
 
+  /**
+   * Versión no-stream que fuerza JSON estructurado vía Ollama `format: 'json'`.
+   * Se usa para pedir al modelo que devuelva la rutina con IDs concretos
+   * (catalog_id / exercise_id) tras haber streameado la versión "humana".
+   *
+   * Devuelve el objeto parseado, o lanza BadRequest si no parsea.
+   */
+  async generateStructuredJson(args: {
+    model?: string;
+    system: string;
+    prompt: string;
+    schemaHint: Record<string, unknown>;
+  }): Promise<unknown> {
+    const baseUrl = this.defaultBaseUrl.replace(/\/+$/, '');
+    const model = (args.model || this.defaultModel).trim();
+    const ctrl = new AbortController();
+    const timer =
+      this.upstreamTimeoutMs > 0
+        ? setTimeout(() => ctrl.abort(), this.upstreamTimeoutMs)
+        : null;
+
+    try {
+      const res = await fetch(`${baseUrl}/api/generate`, {
+        method: 'POST',
+        headers: this.buildUpstreamHeaders(),
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          model,
+          system: args.system,
+          prompt: args.prompt,
+          stream: false,
+          format: args.schemaHint,
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(
+          `Ollama structured HTTP ${res.status}: ${this.sanitizeErrorBody(text) || 'sin cuerpo'}`,
+        );
+      }
+      const json = (await res.json()) as { response?: string };
+      const text = json.response ?? '';
+      try {
+        return JSON.parse(text);
+      } catch {
+        // Si el modelo devolvió JSON con algún ruido (markdown ```), lo limpiamos.
+        const cleaned = text
+          .trim()
+          .replace(/^```(?:json)?/i, '')
+          .replace(/```$/i, '')
+          .trim();
+        return JSON.parse(cleaned);
+      }
+    } catch (err) {
+      this.logger.error(`generateStructuredJson fallo: ${(err as Error).message}`);
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   // ──────────────────────────────────────────────────────────────────────
   // Internals
   // ──────────────────────────────────────────────────────────────────────

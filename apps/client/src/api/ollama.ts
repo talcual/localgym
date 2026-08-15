@@ -221,6 +221,25 @@ export function listOllamaModels(): Promise<{ models: string[] }> {
   return api.get<{ models: string[] }>('/ollama/models').then((r) => r.data);
 }
 
+/**
+ * Pide al backend que llame a Ollama en modo "format: json" para extraer
+ * una versión estructurada de la respuesta (p.ej. una rutina con IDs de
+ * catálogo). Devuelve el objeto parseado tal cual lo emite el modelo.
+ *
+ * `schemaHint` debe ser un JSONSchema mínimo (sólo lo necesita el backend
+ * para reenviarlo al campo `format` de Ollama).
+ */
+export function ollamaStructuredJson(args: {
+  model?: string;
+  system: string;
+  prompt: string;
+  schemaHint: Record<string, unknown>;
+}): Promise<unknown> {
+  return api
+    .post<unknown>('/ollama/structured', args)
+    .then((r) => r.data);
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Hook de React: useOllamaStream
 // ──────────────────────────────────────────────────────────────────────────────

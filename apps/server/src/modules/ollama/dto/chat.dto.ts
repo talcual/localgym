@@ -44,3 +44,27 @@ export class ChatDto {
   @MaxLength(8_000)
   system?: string;
 }
+
+/**
+ * Para pedirle a Ollama un JSON estructurado con IDs concretos de ejercicios.
+ * El cliente debe pasar un `schemaHint` (objeto JSONSchema mínimo) que
+ * documente qué claves se esperan. El backend lo reenvía tal cual al
+ * parámetro `format` de /api/generate.
+ */
+export class StructuredChatDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  model?: string;
+
+  @IsString()
+  @MaxLength(8_000)
+  system: string;
+
+  @IsString()
+  @MaxLength(16_000)
+  prompt: string;
+
+  /** JSONSchema mínimo que describe la forma esperada. */
+  schemaHint: Record<string, unknown>;
+}

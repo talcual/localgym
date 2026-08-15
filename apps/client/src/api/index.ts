@@ -89,3 +89,15 @@ export const progressApi = {
   summary: () => api.get<ProgressSummary>('/progress/summary').then((r) => r.data),
   bmiHistory: () => api.get<BmiHistoryPoint[]>('/progress/bmi-history').then((r) => r.data),
 };
+
+export { routinesApi } from './routines';
+export type {
+  Routine,
+  RoutineItem,
+  RoutineWithItems,
+  RoutineGoal,
+  RoutineLevel,
+  RoutineItemInput,
+  CreateRoutineInput,
+  UpdateRoutineInput,
+} from './routines';

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -11,6 +11,7 @@ import {
   progressApi,
   weightApi,
   usersApi,
+  routinesApi,
 } from '../api';
 import type {
   BodyMeasurement,
@@ -23,9 +24,15 @@ import type {
   UserProfile,
   WeightEntry,
 } from '../api/types';
+import type { RoutineWithItems, CreateRoutineInput } from '../api';
 import { BmiBar, bmiCategoryColor } from '../components/BmiBar';
 import { formatDuration } from '../utils/time';
-import { useOllamaStream } from '../api/ollama';
+import { useOllamaStream, ollamaStructuredJson } from '../api/ollama';
+import {
+  groupRoutineItemsByDay,
+  routineGoalLabel,
+  routineLevelLabel,
+} from '../api/routines';
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -37,7 +44,22 @@ export function Dashboard() {
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [weights, setWeights] = useState<WeightEntry[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [routines, setRoutines] = useState<RoutineWithItems[]>([]);
+  const [activeRoutineId, setActiveRoutineId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshRoutines = useCallback(async () => {
+    try {
+      const [list, active] = await Promise.all([
+        routinesApi.list(),
+        routinesApi.active(),
+      ]);
+      setRoutines(list);
+      setActiveRoutineId(active?.id ?? null);
+    } catch {
+      // Silencioso: si falla la carga de rutinas seguimos mostrando el resto.
+    }
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -49,26 +71,43 @@ export function Dashboard() {
       usersApi.me(),
       catalogApi.list(),
       measurementsApi.latest(),
+      routinesApi.list().catch(() => [] as RoutineWithItems[]),
+      routinesApi.active().catch(() => null as RoutineWithItems | null),
     ])
-      .then(([exs, allSessions, summary, prog, w, p, cat, meas]) => {
-        setExercises(exs);
-        const today = new Date();
-        const y = today.getFullYear();
-        const m = String(today.getMonth() + 1).padStart(2, '0');
-        const d = String(today.getDate()).padStart(2, '0');
-        const key = `${y}-${m}-${d}`;
-        setTodaySessions(
-          allSessions.filter(
-            (s) => new Date(s.performedAt).toISOString().slice(0, 10) === key,
-          ),
-        );
-        setStats(summary);
-        setProgress(prog);
-        setWeights(w);
-        setProfile(p);
-        setCatalog(cat);
-        setMeasurement(meas);
-      })
+      .then(
+        ([
+          exs,
+          allSessions,
+          summary,
+          prog,
+          w,
+          p,
+          cat,
+          meas,
+          routs,
+          active,
+        ]) => {
+          setExercises(exs);
+          const today = new Date();
+          const y = today.getFullYear();
+          const m = String(today.getMonth() + 1).padStart(2, '0');
+          const d = String(today.getDate()).padStart(2, '0');
+          const key = `${y}-${m}-${d}`;
+          setTodaySessions(
+            allSessions.filter(
+              (s) => new Date(s.performedAt).toISOString().slice(0, 10) === key,
+            ),
+          );
+          setStats(summary);
+          setProgress(prog);
+          setWeights(w);
+          setProfile(p);
+          setCatalog(cat);
+          setMeasurement(meas);
+          setRoutines(routs);
+          setActiveRoutineId(active?.id ?? null);
+        },
+      )
       .finally(() => setLoading(false));
   }, []);
 
@@ -140,8 +179,15 @@ export function Dashboard() {
             catalog={catalog}
             userExercises={exercises}
             measurement={measurement}
+            onRoutineSaved={refreshRoutines}
           />
       </div>
+
+      <RoutinesListCard
+        routines={routines}
+        activeRoutineId={activeRoutineId}
+        onChanged={refreshRoutines}
+      />
     </div>
   );
 }
@@ -153,6 +199,7 @@ function AiFitnessCard({
   catalog,
   userExercises,
   measurement,
+  onRoutineSaved,
 }: {
   profile: UserProfile | null;
   progress: ProgressSummary | null;
@@ -160,12 +207,16 @@ function AiFitnessCard({
   catalog: CatalogExercise[];
   userExercises: Exercise[];
   measurement: BodyMeasurement | null;
+  onRoutineSaved?: () => void | Promise<void>;
 }) {
   const [goal, setGoal] = useState<FitnessGoal>('strength');
   const [level, setLevel] = useState<FitnessLevel>('beginner');
   const [days, setDays] = useState<number>(4);
   const [status, setStatus] = useState<AiStatus>('idle');
   const [request, setRequest] = useState<ReturnType<typeof buildAiPrompt> | null>(null);
+  const [savingRoutine, setSavingRoutine] = useState(false);
+  const [savedRoutineId, setSavedRoutineId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const canGenerate = status !== 'streaming';
 
@@ -186,6 +237,12 @@ function AiFitnessCard({
       : null,
   ].filter(Boolean);
 
+  const catalogById = useMemo(() => {
+    const m = new Map<string, CatalogExercise>();
+    for (const c of catalog) m.set(c.id, c);
+    return m;
+  }, [catalog]);
+
   const { text: planText, streaming, error, abort } = useOllamaStream({
     request,
     onComplete: () => setStatus('ready'),
@@ -195,6 +252,12 @@ function AiFitnessCard({
   useEffect(() => {
     if (streaming) setStatus('streaming');
   }, [streaming]);
+
+  // Al cambiar de selección (goal/level/days) resetamos flags de guardado.
+  useEffect(() => {
+    setSavedRoutineId(null);
+    setSaveError(null);
+  }, [goal, level, days]);
 
   function handleGenerate() {
     setStatus('streaming');
@@ -223,6 +286,103 @@ function AiFitnessCard({
     abort();
     setRequest(null);
     setStatus('idle');
+    setSavedRoutineId(null);
+    setSaveError(null);
+  }
+
+  async function handleSaveRoutine() {
+    if (!request || savingRoutine) return;
+    setSavingRoutine(true);
+    setSaveError(null);
+    try {
+      // 1) Pedimos la versión estructurada al backend (que llama a Ollama
+      //    en modo format:json con el mismo system+prompt).
+      const raw = await ollamaStructuredJson({
+        system: request.system,
+        prompt: request.messages
+          .filter((m) => m.role === 'user')
+          .map((m) => m.content)
+          .join('\n'),
+        schemaHint: ROUTINE_JSON_SCHEMA,
+      });
+      const parsed = parseRoutineStructured(raw, days);
+      if (!parsed) {
+        throw new Error('La IA no devolvió un plan estructurado válido.');
+      }
+
+      // 2) Aseguramos que los ejercicios referenciados existan como
+      //    `exercises` del usuario. Para los que vienen del catálogo,
+      //    los importamos.
+      const exerciseIdByCatalog = new Map<string, string>();
+      const missingCatalog = new Set<string>();
+      for (const it of parsed.items) {
+        if (!it.catalogId) continue;
+        const existing = userExercises.find(
+          (e) =>
+            e.name.trim().toLowerCase() ===
+            (catalogById.get(it.catalogId!)?.name ?? '').trim().toLowerCase(),
+        );
+        if (existing) {
+          exerciseIdByCatalog.set(it.catalogId!, existing.id);
+        } else {
+          missingCatalog.add(it.catalogId!);
+        }
+      }
+
+      // Importamos los que faltan del catálogo (paralelo).
+      const importResults = await Promise.all(
+        Array.from(missingCatalog).map(async (cid) => {
+          try {
+            const imported = await catalogApi.import(cid);
+            return { cid, exercise: imported };
+          } catch {
+            return { cid, exercise: null };
+          }
+        }),
+      );
+      for (const r of importResults) {
+        if (r.exercise) exerciseIdByCatalog.set(r.cid, r.exercise.id);
+      }
+
+      // 3) Construimos el payload final y lo enviamos.
+      const itemsPayload = parsed.items.map((it) => ({
+        dayIndex: it.dayIndex,
+        dayLabel: it.dayLabel,
+        exerciseId: it.exerciseId ?? it.catalogId ? exerciseIdByCatalog.get(it.catalogId ?? '') ?? undefined : undefined,
+        catalogId: it.catalogId,
+        sets: it.sets,
+        reps: it.reps,
+        durationPerSetSec: it.durationPerSetSec,
+        restSec: it.restSec,
+        notes: it.notes,
+      }));
+
+      const createInput: CreateRoutineInput = {
+        title: parsed.title,
+        goal,
+        level,
+        daysPerWeek: days,
+        summary: parsed.summary ?? planText.slice(0, 500),
+        items: itemsPayload.filter((it) => it.catalogId || it.exerciseId),
+      };
+      const saved = await routinesApi.create(createInput);
+      setSavedRoutineId(saved.id);
+      await onRoutineSaved?.();
+    } catch (err) {
+      setSaveError((err as Error).message || 'No se pudo guardar la rutina.');
+    } finally {
+      setSavingRoutine(false);
+    }
+  }
+
+  async function handleActivateRoutine() {
+    if (!savedRoutineId) return;
+    try {
+      await routinesApi.activate(savedRoutineId);
+      await onRoutineSaved?.();
+    } catch (err) {
+      setSaveError((err as Error).message || 'No se pudo activar la rutina.');
+    }
   }
 
   return (
@@ -341,12 +501,32 @@ function AiFitnessCard({
             </div>
           )}
           <div className="mt-auto flex items-center gap-2 pt-3">
+            {savedRoutineId ? (
+              <button
+                type="button"
+                onClick={handleActivateRoutine}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium shadow-lg shadow-emerald-950/30 transition hover:bg-emerald-500"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden />
+                Activar esta rutina
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSaveRoutine}
+                disabled={savingRoutine || !planText}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-violet-600/60"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden />
+                {savingRoutine ? 'Guardando…' : 'Guardar como rutina'}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleReset}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:border-violet-500 hover:text-white"
             >
-              Editar selección
+              Editar
             </button>
             <button
               type="button"
@@ -357,6 +537,9 @@ function AiFitnessCard({
               Copiar
             </button>
           </div>
+          {saveError && (
+            <p className="mt-2 text-[11px] text-rose-300">{saveError}</p>
+          )}
         </div>
       )}
     </div>
@@ -409,6 +592,171 @@ function labelSex(sex: UserProfile['sex']) {
     default:
       return '';
   }
+}
+
+/**
+ * Esquema mínimo que se envía como `format` a Ollama para forzar JSON.
+ * Coincide con la forma que luego validamos en `parseRoutineStructured`.
+ */
+const ROUTINE_JSON_SCHEMA = {
+  type: 'object',
+  required: ['title', 'days', 'items'],
+  properties: {
+    title: { type: 'string' },
+    summary: { type: 'string' },
+    days: {
+      type: 'array',
+      minItems: 3,
+      maxItems: 6,
+      items: {
+        type: 'object',
+        required: ['dayIndex', 'dayLabel', 'items'],
+        properties: {
+          dayIndex: { type: 'integer', minimum: 0, maximum: 5 },
+          dayLabel: { type: 'string' },
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['name'],
+              properties: {
+                name: { type: 'string' },
+                catalogId: { type: 'string' },
+                exerciseId: { type: 'string' },
+                sets: { type: 'integer' },
+                reps: { type: 'integer' },
+                durationPerSetSec: { type: 'integer' },
+                restSec: { type: 'integer' },
+                notes: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    },
+    items: {
+      type: 'array',
+      description:
+        'Lista plana de todos los items (mismos objetos que dentro de days.items). Útil si el modelo prefiere aplanar.',
+      items: {
+        type: 'object',
+        required: ['dayIndex', 'dayLabel', 'name'],
+        properties: {
+          dayIndex: { type: 'integer' },
+          dayLabel: { type: 'string' },
+          name: { type: 'string' },
+          catalogId: { type: 'string' },
+          exerciseId: { type: 'string' },
+          sets: { type: 'integer' },
+          reps: { type: 'integer' },
+          durationPerSetSec: { type: 'integer' },
+          restSec: { type: 'integer' },
+          notes: { type: 'string' },
+        },
+      },
+    },
+  },
+} as const;
+
+interface ParsedRoutineItem {
+  dayIndex: number;
+  dayLabel: string;
+  catalogId?: string;
+  exerciseId?: string;
+  name: string;
+  sets?: number;
+  reps?: number;
+  durationPerSetSec?: number;
+  restSec?: number;
+  notes?: string;
+}
+
+interface ParsedRoutine {
+  title: string;
+  summary?: string;
+  items: ParsedRoutineItem[];
+}
+
+/**
+ * Convierte el JSON libre del modelo en una estructura normalizada.
+ * Acepta dos formas:
+ *   A) { title, days: [{ dayIndex, dayLabel, items: [...] }] }
+ *   B) { title, items: [{ dayIndex, dayLabel, ... }] }
+ * Si el modelo no devolvió `days`, lo infiere de `items` truncando a N días.
+ */
+function parseRoutineStructured(
+  raw: unknown,
+  requestedDays: number,
+): ParsedRoutine | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, any>;
+
+  const title = typeof obj.title === 'string' ? obj.title.trim() : '';
+  const summary = typeof obj.summary === 'string' ? obj.summary : undefined;
+
+  const flat: ParsedRoutineItem[] = [];
+  if (Array.isArray(obj.days)) {
+    for (const d of obj.days) {
+      if (!d || typeof d !== 'object') continue;
+      const dayIndex = Number(d.dayIndex);
+      const dayLabel = String(d.dayLabel ?? `Día ${dayIndex + 1}`);
+      if (Array.isArray(d.items)) {
+        for (const it of d.items) {
+          const item = normalizeItem(it, dayIndex, dayLabel);
+          if (item) flat.push(item);
+        }
+      }
+    }
+  }
+  if (flat.length === 0 && Array.isArray(obj.items)) {
+    for (const it of obj.items) {
+      const di = Number(it?.dayIndex);
+      const dl = String(it?.dayLabel ?? `Día ${di + 1}`);
+      const item = normalizeItem(it, Number.isFinite(di) ? di : 0, dl);
+      if (item) flat.push(item);
+    }
+  }
+
+  if (!title || flat.length === 0) return null;
+
+  // Si pidió N días, recortamos el resultado a N días distintos.
+  const days = new Set<number>();
+  for (const it of flat) {
+    days.add(it.dayIndex);
+    if (days.size >= requestedDays) break;
+  }
+  const kept = flat.filter((it) => days.has(it.dayIndex));
+
+  return { title, summary, items: kept };
+}
+
+function normalizeItem(
+  it: any,
+  fallbackDayIndex: number,
+  fallbackDayLabel: string,
+): ParsedRoutineItem | null {
+  if (!it || typeof it !== 'object') return null;
+  const name = typeof it.name === 'string' ? it.name.trim() : '';
+  if (!name) return null;
+  const di = Number(it.dayIndex);
+  const dl = String(it.dayLabel ?? fallbackDayLabel);
+  return {
+    dayIndex: Number.isFinite(di) ? di : fallbackDayIndex,
+    dayLabel: dl || fallbackDayLabel,
+    name,
+    catalogId: typeof it.catalogId === 'string' ? it.catalogId : undefined,
+    exerciseId: typeof it.exerciseId === 'string' ? it.exerciseId : undefined,
+    sets: numOrUndef(it.sets),
+    reps: numOrUndef(it.reps),
+    durationPerSetSec: numOrUndef(it.durationPerSetSec),
+    restSec: numOrUndef(it.restSec),
+    notes: typeof it.notes === 'string' ? it.notes : undefined,
+  };
+}
+
+function numOrUndef(v: unknown): number | undefined {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 /**
@@ -791,5 +1139,155 @@ function WeightSparkline({ values }: { values: number[] }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+
+function RoutinesListCard({
+  routines,
+  activeRoutineId,
+  onChanged,
+}: {
+  routines: RoutineWithItems[];
+  activeRoutineId: string | null;
+  onChanged: () => Promise<void> | void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function activate(id: string) {
+    setBusyId(id);
+    try {
+      await routinesApi.activate(id);
+      await onChanged();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deactivate() {
+    setBusyId('__deactivate');
+    try {
+      await routinesApi.deactivate();
+      await onChanged();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm('¿Borrar esta rutina? No se puede deshacer.')) return;
+    setBusyId(id);
+    try {
+      await routinesApi.remove(id);
+      await onChanged();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (routines.length === 0) {
+    return (
+      <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600/20 text-violet-400">
+            <Sparkles className="h-4 w-4" aria-hidden />
+          </span>
+          <h2 className="font-semibold">Mis rutinas</h2>
+        </div>
+        <p className="mt-2 text-xs text-slate-400">
+          Aún no tenés rutinas guardadas. Generá una con IA desde la tarjeta
+          de "Recomendado fitness" para empezar.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600/20 text-violet-400">
+            <Sparkles className="h-4 w-4" aria-hidden />
+          </span>
+          <h2 className="font-semibold">Mis rutinas</h2>
+        </div>
+        <span className="text-xs text-slate-500">{routines.length} guardadas</span>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {routines.map((r) => {
+          const days = groupRoutineItemsByDay(r.items);
+          const isActive = r.id === activeRoutineId;
+          return (
+            <div
+              key={r.id}
+              className={
+                'flex flex-col rounded-lg border bg-slate-900/40 p-3 ' +
+                (isActive
+                  ? 'border-emerald-500/60 ring-1 ring-emerald-500/30'
+                  : 'border-slate-800')
+              }
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-slate-100">
+                    {r.title}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-slate-400">
+                    {routineGoalLabel(r.goal)} · {routineLevelLabel(r.level)} · {r.daysPerWeek} días
+                  </div>
+                </div>
+                {isActive ? (
+                  <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                    Activa
+                  </span>
+                ) : null}
+              </div>
+
+              <ul className="mt-2 space-y-1.5 text-xs">
+                {days.slice(0, r.daysPerWeek).map((d) => (
+                  <li key={d.dayIndex} className="text-slate-300">
+                    <span className="font-medium">{d.dayLabel}:</span>{' '}
+                    <span className="text-slate-400">
+                      {d.items.length} ejercicio{d.items.length === 1 ? '' : 's'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-auto flex items-center gap-2 pt-3">
+                {isActive ? (
+                  <button
+                    type="button"
+                    onClick={deactivate}
+                    disabled={busyId !== null}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-amber-500 hover:text-amber-200 disabled:opacity-50"
+                  >
+                    {busyId === '__deactivate' ? 'Desactivando…' : 'Desactivar'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => activate(r.id)}
+                    disabled={busyId !== null}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:opacity-50"
+                  >
+                    {busyId === r.id ? 'Activando…' : 'Activar'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => remove(r.id)}
+                  disabled={busyId !== null}
+                  title="Borrar rutina"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-700 px-2 py-1.5 text-xs text-slate-300 hover:border-rose-500 hover:text-rose-300 disabled:opacity-50"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

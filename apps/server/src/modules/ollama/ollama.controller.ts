@@ -15,7 +15,7 @@ import type { Readable } from 'node:stream';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { OllamaService } from './ollama.service';
-import { ChatDto } from './dto/chat.dto';
+import { ChatDto, StructuredChatDto } from './dto/chat.dto';
 
 interface StreamEvent {
   type: 'chunk' | 'done' | 'error';
@@ -103,5 +103,24 @@ export class OllamaController {
   async models() {
     const models = await this.ollamaService.listModels();
     return { models };
+  }
+
+  /**
+   * Versión no-stream que devuelve un JSON estructurado. Útil para
+   * pedirle al modelo que devuelva IDs concretos del catálogo de
+   * ejercicios (catalogId/exerciseId) para poder persistir la rutina.
+   */
+  @Post('structured')
+  async structured(
+    @CurrentUser() current: { userId: string },
+    @Body() dto: StructuredChatDto,
+  ): Promise<unknown> {
+    void current;
+    return this.ollamaService.generateStructuredJson({
+      model: dto.model,
+      system: dto.system,
+      prompt: dto.prompt,
+      schemaHint: dto.schemaHint,
+    });
   }
 }

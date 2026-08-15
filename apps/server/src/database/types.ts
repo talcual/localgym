@@ -102,3 +102,40 @@ export interface BmiInfo {
   weightKg: number | null;
   heightCm: number | null;
 }
+
+export type RoutineGoal = 'strength' | 'hypertrophy' | 'fat_loss' | 'endurance';
+export type RoutineLevel = 'beginner' | 'intermediate' | 'advanced';
+
+export interface Routine {
+  id: string;
+  userId: string;
+  title: string;
+  goal: RoutineGoal;
+  level: RoutineLevel;
+  daysPerWeek: number;
+  isActive: boolean;
+  summary: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoutineItem {
+  id: string;
+  routineId: string;
+  dayIndex: number;
+  dayLabel: string;
+  position: number;
+  /** Puede ser NULL si solo referencia el catálogo (el usuario no lo tiene aún). */
+  exerciseId: string | null;
+  /** Referencia al catálogo público cuando el usuario aún no creó el ejercicio. */
+  catalogId: string | null;
+  sets: number | null;
+  reps: number | null;
+  durationPerSetSec: number | null;
+  restSec: number | null;
+  notes: string | null;
+}
+
+export interface RoutineWithItems extends Routine {
+  items: RoutineItem[];
+}
