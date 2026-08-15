@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import {
+  catalogApi,
   exercisesApi,
+  measurementsApi,
   sessionsApi,
   statsApi,
   progressApi,
@@ -11,7 +13,9 @@ import {
   usersApi,
 } from '../api';
 import type {
+  BodyMeasurement,
   BmiCategory,
+  CatalogExercise,
   Exercise,
   ProgressSummary,
   SessionLog,
@@ -21,10 +25,13 @@ import type {
 } from '../api/types';
 import { BmiBar, bmiCategoryColor } from '../components/BmiBar';
 import { formatDuration } from '../utils/time';
+import { useOllamaStream } from '../api/ollama';
 
 export function Dashboard() {
   const { user } = useAuth();
   const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [catalog, setCatalog] = useState<CatalogExercise[]>([]);
+  const [measurement, setMeasurement] = useState<BodyMeasurement | null>(null);
   const [todaySessions, setTodaySessions] = useState<SessionLog[]>([]);
   const [stats, setStats] = useState<SummaryStats | null>(null);
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
@@ -40,8 +47,10 @@ export function Dashboard() {
       progressApi.summary(),
       weightApi.list(),
       usersApi.me(),
+      catalogApi.list(),
+      measurementsApi.latest(),
     ])
-      .then(([exs, allSessions, summary, prog, w, p]) => {
+      .then(([exs, allSessions, summary, prog, w, p, cat, meas]) => {
         setExercises(exs);
         const today = new Date();
         const y = today.getFullYear();
@@ -57,6 +66,8 @@ export function Dashboard() {
         setProgress(prog);
         setWeights(w);
         setProfile(p);
+        setCatalog(cat);
+        setMeasurement(meas);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -122,7 +133,14 @@ export function Dashboard() {
           />
           <BodyMetricsCard progress={progress} />
         </div>
-        <AiFitnessCard profile={profile} progress={progress} stats={stats} />
+          <AiFitnessCard
+            profile={profile}
+            progress={progress}
+            stats={stats}
+            catalog={catalog}
+            userExercises={exercises}
+            measurement={measurement}
+          />
       </div>
     </div>
   );
@@ -132,17 +150,24 @@ function AiFitnessCard({
   profile,
   progress,
   stats,
+  catalog,
+  userExercises,
+  measurement,
 }: {
   profile: UserProfile | null;
   progress: ProgressSummary | null;
   stats: SummaryStats | null;
+  catalog: CatalogExercise[];
+  userExercises: Exercise[];
+  measurement: BodyMeasurement | null;
 }) {
   const [goal, setGoal] = useState<FitnessGoal>('strength');
   const [level, setLevel] = useState<FitnessLevel>('beginner');
   const [days, setDays] = useState<number>(4);
   const [status, setStatus] = useState<AiStatus>('idle');
+  const [request, setRequest] = useState<ReturnType<typeof buildAiPrompt> | null>(null);
 
-  const canGenerate = status !== 'loading';
+  const canGenerate = status !== 'streaming';
 
   const age = useMemo(() => {
     if (!profile?.birthdate) return null;
@@ -161,14 +186,43 @@ function AiFitnessCard({
       : null,
   ].filter(Boolean);
 
-  const demoPlan = useMemo(
-    () => buildDemoPlan({ goal, level, days }),
-    [goal, level, days],
-  );
+  const { text: planText, streaming, error, abort } = useOllamaStream({
+    request,
+    onComplete: () => setStatus('ready'),
+  });
+
+  // Mientras streamea, status=streaming. Cuando termina, status=ready.
+  useEffect(() => {
+    if (streaming) setStatus('streaming');
+  }, [streaming]);
 
   function handleGenerate() {
-    setStatus('loading');
-    window.setTimeout(() => setStatus('ready'), 1400);
+    setStatus('streaming');
+    setRequest(
+      buildAiPrompt({
+        profile,
+        progress,
+        stats,
+        catalog,
+        userExercises,
+        measurement,
+        goal,
+        level,
+        days,
+      }),
+    );
+  }
+
+  function handleStop() {
+    abort();
+    if (planText.length > 0) setStatus('ready');
+    else setStatus('idle');
+  }
+
+  function handleReset() {
+    abort();
+    setRequest(null);
+    setStatus('idle');
   }
 
   return (
@@ -190,14 +244,25 @@ function AiFitnessCard({
             </p>
           )}
         </div>
+        {status === 'streaming' && (
+          <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400" />
+            Ollama streameando
+          </span>
+        )}
         {status === 'ready' && (
-          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
-            Demo: pendiente Ollama
+          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+            Plan listo
+          </span>
+        )}
+        {error && (
+          <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-300">
+            Error
           </span>
         )}
       </div>
 
-      {status !== 'ready' ? (
+      {status === 'idle' || status === 'streaming' ? (
         <div className="mt-4 flex flex-1 flex-col gap-3">
           <FieldSelect
             label="Objetivo"
@@ -232,46 +297,64 @@ function AiFitnessCard({
             ]}
           />
           <div className="mt-auto flex items-center gap-2 pt-2">
-            <button
-              type="button"
-              disabled={!canGenerate}
-              onClick={handleGenerate}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-violet-600/60"
-            >
-              <Sparkles className="h-4 w-4" aria-hidden />
-              {status === 'loading' ? 'Generando plan…' : 'Generar plan con IA'}
-            </button>
+            {status === 'streaming' ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium shadow-lg shadow-rose-950/30 transition hover:bg-rose-500"
+              >
+                <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                Detener
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!canGenerate}
+                onClick={handleGenerate}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-violet-600/60"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden />
+                Generar plan con IA
+              </button>
+            )}
           </div>
         </div>
       ) : (
         <div className="mt-4 flex flex-1 flex-col">
-          <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-            <div className="text-xs uppercase tracking-wide text-slate-500">
-              {demoPlan.title}
+          {error ? (
+            <div className="rounded-lg border border-rose-900/50 bg-rose-950/30 p-3 text-xs text-rose-200">
+              <div className="font-medium">No se pudo generar el plan</div>
+              <div className="mt-1 text-rose-300/80">{error}</div>
+              <p className="mt-2 text-[11px] text-rose-300/60">
+                Verificá que Ollama esté corriendo en
+                {' '}<code className="font-mono">OLLAMA_BASE_URL</code>.
+              </p>
             </div>
-            <ul className="mt-2 space-y-2">
-              {demoPlan.days.map((day) => (
-                <li key={day.label} className="text-xs">
-                  <div className="font-medium text-slate-200">{day.label}</div>
-                  <div className="text-slate-400">{day.items.join(' · ')}</div>
-                </li>
-              ))}
-            </ul>
-          </div>
+          ) : (
+            <div className="min-h-[140px] flex-1 overflow-auto rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+              <pre className="whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-slate-200">
+                {planText || 'Esperando respuesta…'}
+                {streaming && (
+                  <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-violet-400 align-middle" />
+                )}
+              </pre>
+            </div>
+          )}
           <div className="mt-auto flex items-center gap-2 pt-3">
             <button
               type="button"
-              onClick={() => setStatus('idle')}
+              onClick={handleReset}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500"
             >
               Editar selección
             </button>
             <button
               type="button"
-              onClick={() => undefined}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:border-violet-500 hover:text-white"
+              onClick={() => navigator.clipboard?.writeText(planText)}
+              disabled={!planText}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-200 hover:border-violet-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Crear como rutina
+              Copiar
             </button>
           </div>
         </div>
@@ -313,7 +396,7 @@ function FieldSelect({
 
 type FitnessGoal = 'strength' | 'hypertrophy' | 'fat_loss' | 'endurance';
 type FitnessLevel = 'beginner' | 'intermediate' | 'advanced';
-type AiStatus = 'idle' | 'loading' | 'ready';
+type AiStatus = 'idle' | 'streaming' | 'ready';
 
 function labelSex(sex: UserProfile['sex']) {
   switch (sex) {
@@ -328,49 +411,173 @@ function labelSex(sex: UserProfile['sex']) {
   }
 }
 
-function buildDemoPlan({
-  goal,
-  level,
-  days,
-}: {
+/**
+ * Construye el prompt estructurado que enviaremos a Ollama.
+ *
+ * Secciones (en orden):
+ *   1) System: rol + restricciones de formato/longitud.
+ *   2) User:   perfil · métricas corporales · catálogo disponible ·
+ *              ejercicios del usuario · selección del usuario.
+ *
+ * El catálogo se inyecta con nombre + tipo + sets/reps/duración + categoría
+ * para que el modelo pueda elegir ejercicios REALES del sistema y no inventar.
+ */
+function buildAiPrompt(args: {
+  profile: UserProfile | null;
+  progress: ProgressSummary | null;
+  stats: SummaryStats | null;
+  catalog: CatalogExercise[];
+  userExercises: Exercise[];
+  measurement: BodyMeasurement | null;
   goal: FitnessGoal;
   level: FitnessLevel;
   days: number;
-}) {
+}): { model?: string; system: string; messages: Array<{ role: 'system' | 'user'; content: string }> } {
+  const { profile, progress, stats, catalog, userExercises, measurement, goal, level, days } = args;
+
   const goalLabel = {
-    strength: 'Fuerza',
-    hypertrophy: 'Hipertrofia',
-    fat_loss: 'Pérdida de grasa',
-    endurance: 'Resistencia',
+    strength: 'fuerza',
+    hypertrophy: 'hipertrofia',
+    fat_loss: 'pérdida de grasa',
+    endurance: 'resistencia',
   }[goal];
+
   const levelLabel = {
-    beginner: 'Principiante',
-    intermediate: 'Intermedio',
-    advanced: 'Avanzado',
+    beginner: 'principiante',
+    intermediate: 'intermedio',
+    advanced: 'avanzado',
   }[level];
-  const baseDays = {
-    3: ['Tren superior', 'Tren inferior', 'Cuerpo completo'],
-    4: ['Tren superior', 'Tren inferior', 'Empuje', 'Tirón'],
-    5: ['Empuje', 'Tirón', 'Pierna', 'Deficit calórico', 'Movilidad'],
-    6: ['Empuje', 'Tirón', 'Pierna', 'Upper ligero', 'Lower ligero', 'Core'],
-  } as const;
-  const labels = baseDays[days as 3 | 4 | 5 | 6] ?? baseDays[4];
-  const repsByGoal: Record<FitnessGoal, string> = {
-    strength: '5 x 5 al 80%',
-    hypertrophy: '4 x 10 al 70%',
-    fat_loss: '3 x 15 al 60%',
-    endurance: '3 x 20 al 50%',
-  };
+
+  // ── Sección 1: Perfil ────────────────────────────────────────────────
+  const perfil: string[] = [];
+  if (profile?.heightCm != null) perfil.push(`Altura: ${Math.round(profile.heightCm)} cm`);
+  if (profile?.sex) perfil.push(`Sexo: ${labelSex(profile.sex)}`);
+  if (profile?.birthdate) {
+    const b = new Date(profile.birthdate);
+    const age = Math.max(0, Math.floor((Date.now() - b.getTime()) / (365.25 * 86400000)));
+    if (!Number.isNaN(age)) perfil.push(`Edad: ${age} años`);
+  }
+  if (progress?.latestWeight?.weightKg != null)
+    perfil.push(`Peso actual: ${progress.latestWeight.weightKg.toFixed(1)} kg`);
+  if (stats?.totalSessions != null)
+    perfil.push(`Sesiones registradas (total): ${stats.totalSessions}`);
+  if (stats?.currentStreakDays != null)
+    perfil.push(`Racha actual: ${stats.currentStreakDays} días`);
+
+  // ── Sección 2: Body metrics ──────────────────────────────────────────
+  const metricas: string[] = [];
+  const m = measurement;
+  const metricPairs: Array<[string, number | null | undefined]> = [
+    ['Pecho', m?.chestCm],
+    ['Cintura', m?.waistCm],
+    ['Cadera', m?.hipsCm],
+    ['Hombros', m?.shouldersCm],
+    ['Cuello', m?.neckCm],
+    ['Brazo izquierdo', m?.leftArmCm],
+    ['Brazo derecho', m?.rightArmCm],
+    ['Muslo izquierdo', m?.leftThighCm],
+    ['Muslo derecho', m?.rightThighCm],
+    ['Pantorrilla izquierda', m?.leftCalfCm],
+    ['Pantorrilla derecha', m?.rightCalfCm],
+    ['% grasa corporal', m?.bodyFatPct],
+  ];
+  for (const [label, val] of metricPairs) {
+    if (val == null) continue;
+    const unit = label.includes('grasa') ? '%' : ' cm';
+    const formatted = label.includes('grasa')
+      ? val.toFixed(1)
+      : val.toFixed(1);
+    metricas.push(`${label}: ${formatted}${unit}`);
+  }
+  if (progress?.bmi.bmi != null) {
+    metricas.push(
+      `IMC: ${progress.bmi.bmi.toFixed(1)} (${progress.bmi.categoryLabel ?? ''})`.trim(),
+    );
+  }
+
+  // ── Sección 3: Catálogo disponible ───────────────────────────────────
+  // Formato compacto, una línea por ejercicio. Sin truncar nombres
+  // duplicados (dejamos que el modelo vea el universo completo).
+  const catalogo = (catalog ?? [])
+    .slice(0, 200) // tope defensivo por si el catálogo crece
+    .map((c) => {
+      const parts = [`- ${c.name}`];
+      parts.push(`(${c.category ?? 'general'})`);
+      parts.push(`tipo ${c.type}`);
+      if (c.repsPerSet != null) parts.push(`${c.sets}x${c.repsPerSet}`);
+      else if (c.durationPerSetSec != null)
+        parts.push(`${c.sets}x${c.durationPerSetSec}s`);
+      else parts.push(`${c.sets} series`);
+      if (c.restSec != null) parts.push(`descanso ${c.restSec}s`);
+      return parts.join(' ');
+    });
+
+  // ── Sección 4: Ejercicios ya creados por el usuario ─────────────────
+  const userExLines = (userExercises ?? []).map((e) => {
+    const parts = [`- ${e.name}`, `tipo ${e.type}`];
+    if (e.repsPerSet != null) parts.push(`${e.sets}x${e.repsPerSet}`);
+    else if (e.durationPerSetSec != null)
+      parts.push(`${e.sets}x${e.durationPerSetSec}s`);
+    else parts.push(`${e.sets} series`);
+    return parts.join(' ');
+  });
+
+  // ── System prompt (rol + restricciones) ──────────────────────────────
+  const system =
+    `Sos un coach de fitness. Respondé SIEMPRE en español rioplatense, en texto plano (sin markdown, sin JSON, sin tablas, sin emojis). Sé conciso: máximo ~250 palabras. ` +
+    `Usá SOLO ejercicios que aparezcan listados en la sección "Catálogo disponible" del mensaje del usuario. ` +
+    `Si un ejercicio está también en "Ejercicios del usuario", podés sugerirlo igual. ` +
+    `No inventes nombres de ejercicios. Si el catálogo no tiene lo que necesitás, indicá brevemente "ejercicio alternativo" en su lugar.`;
+
+  // ── User prompt (secciones estructuradas) ────────────────────────────
+  const sections: string[] = [];
+  sections.push(`# Selección del usuario`);
+  sections.push(`- Objetivo: ${goalLabel}`);
+  sections.push(`- Nivel: ${levelLabel}`);
+  sections.push(`- Días por semana: ${days}`);
+
+  if (perfil.length > 0) {
+    sections.push('');
+    sections.push(`# Perfil`);
+    perfil.forEach((l) => sections.push(`- ${l}`));
+  }
+
+  if (metricas.length > 0) {
+    sections.push('');
+    sections.push(`# Métricas corporales`);
+    metricas.forEach((l) => sections.push(`- ${l}`));
+  } else {
+    sections.push('');
+    sections.push(`# Métricas corporales`);
+    sections.push(`- (sin datos cargados)`);
+  }
+
+  if (catalogo.length > 0) {
+    sections.push('');
+    sections.push(`# Catálogo disponible (usar solo estos ejercicios)`);
+    catalogo.forEach((l) => sections.push(l));
+  }
+
+  if (userExLines.length > 0) {
+    sections.push('');
+    sections.push(`# Ejercicios del usuario (ya los tiene)`);
+    userExLines.forEach((l) => sections.push(l));
+  }
+
+  sections.push('');
+  sections.push(`# Formato de respuesta (texto plano)`);
+  sections.push(`1) Una sola línea con el título del plan (ej: "Plan X · Y · Z días").`);
+  sections.push(`2) Por cada día, una línea con el nombre del día y debajo una lista corta separada por " · " con: nombre del ejercicio principal (del catálogo), series x reps o segundos, descanso, y nota breve.`);
+  sections.push(`3) Una línea final con un único consejo práctico para esta semana.`);
+
+  const user = sections.join('\n');
+
   return {
-    title: `Plan ${levelLabel} · ${goalLabel} · ${days} días`,
-    days: labels.map((label) => ({
-      label,
-      items: [
-        repsByGoal[goal],
-        'Descanso entre series 60s',
-        'Calentamiento 5–8 min',
-      ],
-    })),
+    system,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
   };
 }
 
