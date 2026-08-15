@@ -30,6 +30,8 @@ export const usersApi = {
 
 export const exercisesApi = {
   list: () => api.get<Exercise[]>('/exercises').then((r) => r.data),
+  /** Solo los ejercicios creados manualmente (excluye los importados por AI). */
+  listManual: () => api.get<Exercise[]>('/exercises/manual').then((r) => r.data),
   get: (id: string) => api.get<Exercise>(`/exercises/${id}`).then((r) => r.data),
   create: (data: Partial<Exercise>) =>
     api.post<Exercise>('/exercises', data).then((r) => r.data),
@@ -109,6 +111,7 @@ export type {
   CatalogExercise,
   DailyCount,
   Exercise,
+  ExerciseSource,
   ExerciseAggregate,
   ProgressSummary,
   SessionLog,

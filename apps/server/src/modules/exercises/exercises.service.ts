@@ -1,9 +1,14 @@
-import { Inject, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Client } from '@libsql/client';
 import { v4 as uuid } from 'uuid';
 
 import { DATABASE } from '../../database/database.tokens';
-import { Exercise, ExerciseType } from '../../database/types';
+import { Exercise, ExerciseSource, ExerciseType } from '../../database/types';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
 
@@ -14,6 +19,20 @@ export class ExercisesService {
   async list(userId: string): Promise<Exercise[]> {
     const res = await this.db.execute({
       sql: 'SELECT * FROM exercises WHERE user_id = ? ORDER BY created_at DESC',
+      args: [userId],
+    });
+    return res.rows.map(mapExercise);
+  }
+
+  /**
+   * Lista solo los ejercicios creados manualmente por el usuario
+   * (excluye los importados por AI Couch / catalogo).
+   */
+  async listManual(userId: string): Promise<Exercise[]> {
+    const res = await this.db.execute({
+      sql: `SELECT * FROM exercises
+            WHERE user_id = ? AND source = 'manual'
+            ORDER BY created_at DESC`,
       args: [userId],
     });
     return res.rows.map(mapExercise);
@@ -32,12 +51,16 @@ export class ExercisesService {
     return ex;
   }
 
-  async create(userId: string, dto: CreateExerciseDto): Promise<Exercise> {
+  async create(
+    userId: string,
+    dto: CreateExerciseDto,
+    source: ExerciseSource = 'manual',
+  ): Promise<Exercise> {
     const id = uuid();
     await this.db.execute({
       sql: `INSERT INTO exercises
-        (id, user_id, name, type, sets, duration_per_set_sec, reps_per_set, rest_sec, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, user_id, name, type, sets, duration_per_set_sec, reps_per_set, rest_sec, notes, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         id,
         userId,
@@ -48,6 +71,7 @@ export class ExercisesService {
         dto.repsPerSet ?? null,
         dto.restSec ?? 0,
         dto.notes ?? null,
+        source,
       ],
     });
     const ex = await this.db.execute({
@@ -97,18 +121,22 @@ export class ExercisesService {
 }
 
 function mapExercise(row: any): Exercise {
+  const source: ExerciseSource =
+    row.source === 'ai_import' ? 'ai_import' : 'manual';
   return {
     id: String(row.id),
     userId: String(row.user_id),
     name: String(row.name),
     type: row.type as ExerciseType,
     sets: Number(row.sets),
-    durationPerSetSec: row.duration_per_set_sec == null
-      ? null
-      : Number(row.duration_per_set_sec),
+    durationPerSetSec:
+      row.duration_per_set_sec == null
+        ? null
+        : Number(row.duration_per_set_sec),
     repsPerSet: row.reps_per_set == null ? null : Number(row.reps_per_set),
     restSec: Number(row.rest_sec),
     notes: row.notes == null ? null : String(row.notes),
+    source,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };

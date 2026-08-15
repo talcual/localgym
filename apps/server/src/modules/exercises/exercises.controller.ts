@@ -25,6 +25,15 @@ export class ExercisesController {
     return this.exercisesService.list(current.userId);
   }
 
+  /**
+   * Lista sólo los ejercicios creados manualmente por el usuario
+   * (excluye los importados por AI Couch / catálogo).
+   */
+  @Get('manual')
+  listManual(@CurrentUser() current: { userId: string }) {
+    return this.exercisesService.listManual(current.userId);
+  }
+
   @Get(':id')
   findOne(
     @CurrentUser() current: { userId: string },

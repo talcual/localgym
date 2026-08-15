@@ -16,6 +16,12 @@ const SCHEMA: Array<{ table: string; columns: ColumnSpec[] }> = [
       { name: 'birthdate', type: 'TEXT' },
     ],
   },
+  {
+    table: 'exercises',
+    columns: [
+      { name: 'source', type: "TEXT NOT NULL DEFAULT 'manual'" },
+    ],
+  },
 ];
 
 @Injectable()
@@ -47,6 +53,7 @@ export class DatabaseInitService implements OnModuleInit {
           reps_per_set INTEGER,
           rest_sec INTEGER NOT NULL DEFAULT 0,
           notes TEXT,
+          source TEXT NOT NULL DEFAULT 'manual',
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
           updated_at TEXT NOT NULL DEFAULT (datetime('now')),
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

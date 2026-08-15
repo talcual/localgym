@@ -1,6 +1,9 @@
 export const EXERCISE_TYPES = ['TIME', 'REPS', 'MIXED'] as const;
 export type ExerciseType = (typeof EXERCISE_TYPES)[number];
 
+export const EXERCISE_SOURCES = ['manual', 'ai_import'] as const;
+export type ExerciseSource = (typeof EXERCISE_SOURCES)[number];
+
 export const SEX_VALUES = ['MALE', 'FEMALE', 'OTHER'] as const;
 export type Sex = (typeof SEX_VALUES)[number];
 
@@ -25,6 +28,8 @@ export interface Exercise {
   repsPerSet: number | null;
   restSec: number;
   notes: string | null;
+  /** Cómo se creó este ejercicio en la cuenta del usuario. */
+  source: ExerciseSource;
   createdAt: string;
   updatedAt: string;
 }

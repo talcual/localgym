@@ -23,6 +23,8 @@ export interface UserProfile extends AuthUser {
   createdAt: string;
 }
 
+export type ExerciseSource = 'manual' | 'ai_import';
+
 export interface Exercise {
   id: string;
   userId: string;
@@ -33,6 +35,8 @@ export interface Exercise {
   repsPerSet: number | null;
   restSec: number;
   notes: string | null;
+  /** Cómo se creó este ejercicio: a mano o importado por AI Couch. */
+  source: ExerciseSource;
   createdAt: string;
   updatedAt: string;
 }

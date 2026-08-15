@@ -52,14 +52,18 @@ export class CatalogController {
     const item = await this.catalogService.findOne(id);
     if (!item) throw new NotFoundException('Ejercicio no encontrado en el catálogo');
 
-    return this.exercisesService.create(current.userId, {
-      name: item.name,
-      type: item.type,
-      sets: item.sets,
-      durationPerSetSec: item.durationPerSetSec ?? undefined,
-      repsPerSet: item.repsPerSet ?? undefined,
-      restSec: item.restSec,
-      notes: item.notes ?? undefined,
-    });
+    return this.exercisesService.create(
+      current.userId,
+      {
+        name: item.name,
+        type: item.type,
+        sets: item.sets,
+        durationPerSetSec: item.durationPerSetSec ?? undefined,
+        repsPerSet: item.repsPerSet ?? undefined,
+        restSec: item.restSec,
+        notes: item.notes ?? undefined,
+      },
+      'ai_import',
+    );
   }
 }

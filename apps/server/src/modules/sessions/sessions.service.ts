@@ -41,6 +41,7 @@ export class SessionsService {
              e.type as e_type, e.sets as e_sets,
              e.duration_per_set_sec as e_dur, e.reps_per_set as e_reps,
              e.rest_sec as e_rest, e.notes as e_notes,
+             e.source as e_source,
              e.created_at as e_created_at, e.updated_at as e_updated_at
       FROM session_logs s
       LEFT JOIN exercises e ON e.id = s.exercise_id
@@ -61,6 +62,7 @@ export class SessionsService {
                    e.type as e_type, e.sets as e_sets,
                    e.duration_per_set_sec as e_dur, e.reps_per_set as e_reps,
                    e.rest_sec as e_rest, e.notes as e_notes,
+                   e.source as e_source,
                    e.created_at as e_created_at, e.updated_at as e_updated_at
             FROM session_logs s
             LEFT JOIN exercises e ON e.id = s.exercise_id
@@ -102,6 +104,7 @@ export class SessionsService {
         exRow.reps_per_set == null ? null : Number(exRow.reps_per_set),
       restSec: Number(exRow.rest_sec),
       notes: exRow.notes == null ? null : String(exRow.notes),
+      source: exRow.source === 'ai_import' ? 'ai_import' : 'manual',
       createdAt: String(exRow.created_at),
       updatedAt: String(exRow.updated_at),
     };
@@ -165,6 +168,7 @@ function mapSessionWithExercise(row: any): SessionLogWithExercise {
           repsPerSet: row.e_reps == null ? null : Number(row.e_reps),
           restSec: Number(row.e_rest),
           notes: row.e_notes == null ? null : String(row.e_notes),
+          source: row.e_source === 'ai_import' ? 'ai_import' : 'manual',
           createdAt: String(row.e_created_at),
           updatedAt: String(row.e_updated_at),
         }
