@@ -323,22 +323,74 @@ function AiFitnessCard({
       }
 
       // 2) Aseguramos que los ejercicios referenciados existan como
-      //    `exercises` del usuario. Para los que vienen del catálogo,
-      //    los importamos.
+      //    `exercises` del usuario. El modelo rara vez devuelve `catalogId`
+      //    correcto, así que primero intentamos matchear por `catalogId`
+      //    que ya venga, y si no, hacemos fuzzy match por nombre contra
+      //    el catálogo.
       const exerciseIdByCatalog = new Map<string, string>();
       const missingCatalog = new Set<string>();
+
+      const matchByName = (name: string): CatalogExercise | undefined => {
+        const norm = name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+        // 1) match exacto (case + accent insensitive)
+        let hit = catalog.find((c) => {
+          const cn = c.name
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+          return cn === norm;
+        });
+        if (hit) return hit;
+        // 2) match por inclusión (el item contiene el nombre del catálogo o viceversa)
+        hit = catalog.find((c) => {
+          const cn = c.name
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+          return cn.includes(norm) || norm.includes(cn);
+        });
+        return hit;
+      };
+
       for (const it of parsed.items) {
-        if (!it.catalogId) continue;
-        const existing = userExercises.find(
-          (e) =>
-            e.name.trim().toLowerCase() ===
-            (catalogById.get(it.catalogId!)?.name ?? '').trim().toLowerCase(),
-        );
-        if (existing) {
-          exerciseIdByCatalog.set(it.catalogId!, existing.id);
-        } else {
-          missingCatalog.add(it.catalogId!);
+        // Resolver catalogId real: si el modelo ya dio uno válido, úsalo;
+        // si no, hacer fuzzy match por nombre.
+        let resolvedCatalogId = it.catalogId;
+        if (!resolvedCatalogId || !catalogById.has(resolvedCatalogId)) {
+          const match = matchByName(it.name);
+          if (match) resolvedCatalogId = match.id;
         }
+        if (!resolvedCatalogId) continue;
+
+        const catalogItem = catalogById.get(resolvedCatalogId);
+        if (!catalogItem) continue;
+
+        const existing = userExercises.find((e) => {
+          const en = e.name
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+          const cn = catalogItem.name
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim();
+          return en === cn;
+        });
+        if (existing) {
+          exerciseIdByCatalog.set(resolvedCatalogId, existing.id);
+        } else {
+          missingCatalog.add(resolvedCatalogId);
+        }
+        // Mutamos el item con el catalogId resuelto para usarlo abajo.
+        it.catalogId = resolvedCatalogId;
       }
 
       // Importamos los que faltan del catálogo (paralelo).
@@ -357,17 +409,22 @@ function AiFitnessCard({
       }
 
       // 3) Construimos el payload final y lo enviamos.
-      const itemsPayload = parsed.items.map((it) => ({
-        dayIndex: it.dayIndex,
-        dayLabel: it.dayLabel,
-        exerciseId: it.exerciseId ?? it.catalogId ? exerciseIdByCatalog.get(it.catalogId ?? '') ?? undefined : undefined,
-        catalogId: it.catalogId,
-        sets: it.sets,
-        reps: it.reps,
-        durationPerSetSec: it.durationPerSetSec,
-        restSec: it.restSec,
-        notes: it.notes,
-      }));
+      const itemsPayload = parsed.items
+        .filter((it) => it.catalogId)
+        .map((it) => {
+          const cid = it.catalogId as string;
+          return {
+            dayIndex: it.dayIndex,
+            dayLabel: it.dayLabel,
+            exerciseId: exerciseIdByCatalog.get(cid),
+            catalogId: cid,
+            sets: it.sets,
+            reps: it.reps,
+            durationPerSetSec: it.durationPerSetSec,
+            restSec: it.restSec,
+            notes: it.notes,
+          };
+        });
 
       const createInput: CreateRoutineInput = {
         title: parsed.title,
@@ -375,7 +432,7 @@ function AiFitnessCard({
         level,
         daysPerWeek: days,
         summary: parsed.summary ?? planText.slice(0, 500),
-        items: itemsPayload.filter((it) => it.catalogId || it.exerciseId),
+        items: itemsPayload,
       };
       const saved = await routinesApi.create(createInput);
       setSavedRoutineId(saved.id);
@@ -736,7 +793,13 @@ function parseRoutineStructured(
 
   // Title: aceptar varios alias.
   const titleRaw =
-    obj.title ?? obj.name ?? obj.planTitle ?? obj.routineTitle ?? obj.titulo;
+    obj.title ??
+    obj.planName ??
+    obj.routineName ??
+    obj.name ??
+    obj.planTitle ??
+    obj.routineTitle ??
+    obj.titulo;
   const title = typeof titleRaw === 'string' ? titleRaw.trim() : '';
   const summary =
     typeof obj.summary === 'string'
@@ -756,17 +819,21 @@ function parseRoutineStructured(
     }
   };
 
-  // A) days:[{dayIndex, dayLabel, items:[...]}]
+  // A) days:[{dayIndex, dayLabel, items:[...] | exercises:[...]}]
   if (Array.isArray(obj.days)) {
     for (const d of obj.days) {
       if (!d || typeof d !== 'object') continue;
       const dayIndex = Number((d as any).dayIndex ?? (d as any).day ?? (d as any).index);
+      // `day` puede ser 1-indexed ("Día 1"); lo pasamos a 0-indexed.
+      const di = Number.isFinite(dayIndex) && dayIndex >= 1 ? dayIndex - 1 : (dayIndex || 0);
       const dayLabel = String(
-        (d as any).dayLabel ?? (d as any).label ?? `Día ${dayIndex + 1}`,
+        (d as any).dayLabel ?? (d as any).label ?? `Día ${di + 1}`,
       );
-      if (Array.isArray((d as any).items)) {
-        for (const it of (d as any).items) {
-          const norm = normalizeItem(it, dayIndex, dayLabel);
+      const itemsArr =
+        (d as any).items ?? (d as any).exercises ?? (d as any).workouts;
+      if (Array.isArray(itemsArr)) {
+        for (const it of itemsArr) {
+          const norm = normalizeItem(it, di, dayLabel);
           if (norm) flat.push(norm);
         }
       }
@@ -840,6 +907,10 @@ function normalizeItem(
   const exerciseIdRaw =
     it.exerciseId ?? it.exercise_id ?? it.userExerciseId;
 
+  // El modelo suele devolver `rest` como string tipo "60s" o "60 segundos".
+  const restRaw =
+    it.restSec ?? it.rest_sec ?? it.rest ?? it.restSeconds ?? it.restTime;
+
   return {
     dayIndex: Number.isFinite(di) ? di : fallbackDayIndex,
     dayLabel: dl || fallbackDayLabel,
@@ -848,14 +919,30 @@ function normalizeItem(
     exerciseId: typeof exerciseIdRaw === 'string' ? exerciseIdRaw : undefined,
     sets: numOrUndef(it.sets ?? it.series),
     reps: numOrUndef(it.reps ?? it.repetitions),
-    durationPerSetSec: numOrUndef(it.durationPerSetSec ?? it.duration_sec ?? it.seconds),
-    restSec: numOrUndef(it.restSec ?? it.rest_sec ?? it.rest),
+    durationPerSetSec: numOrUndef(
+      it.durationPerSetSec ?? it.duration_sec ?? it.seconds ?? it.duration,
+    ),
+    restSec: parseRestToSeconds(restRaw),
     notes: typeof it.notes === 'string'
       ? it.notes
       : typeof it.note === 'string'
         ? it.note
         : undefined,
   };
+}
+
+/**
+ * Convierte un valor de descanso a segundos.
+ * Acepta: number, "60", "60s", "60 segundos", "60s descanso", 90, null, undefined.
+ */
+function parseRestToSeconds(raw: unknown): number | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return Math.round(raw);
+  if (typeof raw !== 'string') return undefined;
+  const m = raw.match(/-?\d+(\.\d+)?/);
+  if (!m) return undefined;
+  const n = Number(m[0]);
+  return Number.isFinite(n) ? Math.round(n) : undefined;
 }
 
 function numOrUndef(v: unknown): number | undefined {
