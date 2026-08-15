@@ -393,7 +393,7 @@ function AiFitnessCard({
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600/20 text-violet-400">
               <Sparkles className="h-4 w-4" aria-hidden />
             </span>
-            <h2 className="font-semibold">Recomendado fitness</h2>
+            <h2 className="font-semibold">AI Couch</h2>
           </div>
           <p className="mt-1 text-xs text-slate-400">
             Genera un plan personalizado con IA a partir de tus métricas.
@@ -1196,7 +1196,7 @@ function RoutinesListCard({
         </div>
         <p className="mt-2 text-xs text-slate-400">
           Aún no tenés rutinas guardadas. Generá una con IA desde la tarjeta
-          de "Recomendado fitness" para empezar.
+          de "AI Couch" para empezar.
         </p>
       </div>
     );
