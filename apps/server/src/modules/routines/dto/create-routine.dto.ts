@@ -20,7 +20,7 @@ export const ROUTINE_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
 export class RoutineItemDto {
   @IsInt()
   @Min(0)
-  @MaxLength(20)
+  @Max(5)
   dayIndex: number;
 
   @IsString()
