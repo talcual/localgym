@@ -148,7 +148,7 @@ export function Dashboard() {
         <MetricCard
           label="Progreso semanal"
           value={`${weeklyProgress}%`}
-          detail={stats?.currentStreakDays ? 'Sigue así!' : 'Empieza hoy'}
+          detail={stats?.currentStreakDays ? '¡Sigue así!' : 'Empieza hoy'}
           icon="⌁"
           accent="violet"
           progress={weeklyProgress}
@@ -587,7 +587,7 @@ function AiFitnessCard({
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-violet-600/60"
               >
                 <Sparkles className="h-4 w-4" aria-hidden />
-                {savingRoutine ? 'Guardando…' : 'Guardar como rutina'}
+                {savingRoutine ? 'Guardando...' : 'Guardar como rutina'}
               </button>
             )}
             <button
@@ -1386,7 +1386,7 @@ function RoutinesListCard({
           <h2 className="font-semibold">Mis rutinas</h2>
         </div>
         <p className="mt-2 text-xs text-slate-400">
-          Aún no tenés rutinas guardadas. Generá una con IA desde la tarjeta
+          Aún no tienes rutinas guardadas. Genera una con IA desde la tarjeta
           de "AI Couch" para empezar.
         </p>
       </div>

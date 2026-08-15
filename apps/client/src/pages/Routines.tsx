@@ -86,7 +86,7 @@ export function Routines() {
     const firstWithExercise = day.items.find((it) => it.exerciseId);
     if (!firstWithExercise || !firstWithExercise.exerciseId) {
       setError(
-        'Este día no tiene ejercicios importados todavía. Probá con otro día.',
+        'Este día no tiene ejercicios importados todavía. Prueba con otro día.',
       );
       return;
     }
@@ -109,7 +109,8 @@ export function Routines() {
           Mis rutinas
         </h1>
         <p className="mt-1 text-sm text-slate-400">
-          Activá una sola por vez. Empezá cada sesión por el día que te toque.
+          Activa una sola por vez. Empieza cada sesión por el día que te toque.
+          (Cargando...)
         </p>
       </div>
 
@@ -136,10 +137,10 @@ export function Routines() {
       {routines.length === 0 ? (
         <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-8 text-center text-slate-400">
           <Sparkles className="mx-auto mb-2 h-6 w-6 text-violet-400" aria-hidden />
-          <p>Aún no tenés rutinas guardadas.</p>
+          <p>Aún no tienes rutinas guardadas.</p>
           <p className="mt-1 text-xs text-slate-500">
-            Andá al <Link to="/app" className="text-violet-300 underline">Dashboard</Link> y
-            generá una con AI Couch.
+            Ve al <Link to="/app" className="text-violet-300 underline">Dashboard</Link> y
+            genera una con AI Couch.
           </p>
         </div>
       ) : (
@@ -299,7 +300,7 @@ function RoutineCard({
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
                   title={
                     !isActive
-                      ? 'Activá la rutina para poder entrenar'
+                      ? 'Activa la rutina para poder entrenar'
                       : !currentDay.items.some((it) => it.exerciseId)
                         ? 'Este día no tiene ejercicios importables'
                         : 'Entrenar este día'

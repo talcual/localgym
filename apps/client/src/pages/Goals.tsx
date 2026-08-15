@@ -140,7 +140,7 @@ export function Goals() {
           Objetivos
         </h1>
         <p className="mt-1 text-sm text-slate-400">
-          Fijá metas realistas y seguí tu progreso con datos reales.
+          Fija metas realistas y sigue tu progreso con datos reales.
         </p>
       </div>
 
@@ -189,10 +189,10 @@ export function Goals() {
         <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
           <div className="flex items-center gap-2">
             <Target className="h-4 w-4 text-violet-400" aria-hidden />
-            <h2 className="text-base font-semibold">Sugeridos para vos</h2>
+            <h2 className="text-base font-semibold">Sugeridos</h2>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            En base a tu progreso actual. Agregalos con un click.
+            En base a tu progreso actual. Agrégalos con un clic.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {suggested.map((s) => (
@@ -254,7 +254,7 @@ export function Goals() {
 
         {goals.length === 0 ? (
           <p className="mt-4 text-xs text-slate-500">
-            Aún no tenés objetivos. Probá agregar uno sugerido o creá uno
+            Aún no tienes objetivos. Prueba agregando uno sugerido o crea uno
             propio.
           </p>
         ) : (

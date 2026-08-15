@@ -62,7 +62,7 @@ export function Stats() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Por rutina</h2>
+        <h2 className="text-lg font-semibold mb-3">Por ejercicio</h2>
         {byExercise.length === 0 ? (
           <div className="text-slate-400 text-sm">Sin datos aún.</div>
         ) : (
