@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -66,5 +67,6 @@ export class StructuredChatDto {
   prompt: string;
 
   /** JSONSchema mínimo que describe la forma esperada. */
+  @IsObject()
   schemaHint: Record<string, unknown>;
 }
