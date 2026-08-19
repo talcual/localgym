@@ -385,10 +385,12 @@ export function SessionRunner() {
       // Si hay más ejercicios en la cola de la rutina actual, encadenar al siguiente.
       if (remainingQueue.length > 0) {
         const [nextId, ...rest] = remainingQueue;
+        // La query string incluye el ejercicio actual (al que vamos a navegar)
+        // seguido de los pendientes, para que SessionRunner pueda reconstruir
+        // la posición en la cola cuando se monte de nuevo.
+        const order = [nextId, ...rest];
         const qs =
-          rest.length > 0
-            ? '?' + rest.map((id) => `ex=${encodeURIComponent(id)}`).join('&')
-            : '';
+          '?' + order.map((id) => `ex=${encodeURIComponent(id)}`).join('&');
         navigate(`/sessions/run/${nextId}${qs}`, {
           state: routineContext ?? undefined,
           replace: true,

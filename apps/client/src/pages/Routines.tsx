@@ -93,10 +93,12 @@ export function Routines() {
       return;
     }
     const [first, ...rest] = queue;
-    const remaining = rest
-      .map((id) => `ex=${encodeURIComponent(id)}`)
-      .join('&');
-    const qs = remaining ? `?${remaining}` : '';
+    // La query string incluye el actual + los pendientes, en orden.
+    // Esto permite al SessionRunner reconstruir la posición exacta del ejercicio
+    // actual dentro del día, incluso tras navegaciones internas con replace.
+    const order = [first, ...rest];
+    const qs =
+      '?' + order.map((id) => `ex=${encodeURIComponent(id)}`).join('&');
     navigate(`/sessions/run/${first}${qs}`, {
       state: {
         routineId: routine.id,
