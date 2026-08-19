@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { exercisesApi, sessionsApi } from '../api';
 import { Exercise } from '../api/types';
 import { formatTimer } from '../utils/time';
@@ -12,9 +12,49 @@ interface SetEntry {
   skipped: boolean;
 }
 
+interface RoutineContextState {
+  routineId?: string;
+  routineTitle?: string;
+  dayIndex?: number;
+  dayLabel?: string;
+  queue?: string[];
+}
+
 export function SessionRunner() {
   const { exerciseId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const state = (location.state as RoutineContextState | null) ?? null;
+  const routineContext: RoutineContextState | null = useMemo(() => {
+    if (state && state.queue && state.queue.length > 0) return state;
+    // Fallback: reconstruir la cola desde query params (ex=ID&ex=ID...).
+    const fromQs = searchParams.getAll('ex').filter(Boolean);
+    if (fromQs.length > 0) {
+      return {
+        routineId: undefined,
+        routineTitle: undefined,
+        dayIndex: undefined,
+        dayLabel: undefined,
+        queue: fromQs,
+      };
+    }
+    return null;
+  }, [state, searchParams]);
+
+  const queueFromContext = routineContext?.queue ?? [];
+  const currentIndexInQueue = useMemo(
+    () => (exerciseId ? queueFromContext.indexOf(exerciseId) : -1),
+    [queueFromContext, exerciseId],
+  );
+  const remainingQueue: string[] = useMemo(() => {
+    if (currentIndexInQueue < 0) return [];
+    return queueFromContext.slice(currentIndexInQueue + 1);
+  }, [queueFromContext, currentIndexInQueue]);
+
+  const totalInQueue = queueFromContext.length;
+  const finishedCount = Math.max(0, currentIndexInQueue);
 
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [loading, setLoading] = useState(true);
@@ -293,7 +333,11 @@ export function SessionRunner() {
   function cancel() {
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
-    navigate('/exercises');
+    if (routineContext?.routineId) {
+      navigate('/routines');
+    } else {
+      navigate('/exercises');
+    }
   }
 
   async function finish() {
@@ -337,6 +381,22 @@ export function SessionRunner() {
         totalDurationSec,
         totalReps,
       });
+
+      // Si hay más ejercicios en la cola de la rutina actual, encadenar al siguiente.
+      if (remainingQueue.length > 0) {
+        const [nextId, ...rest] = remainingQueue;
+        const qs =
+          rest.length > 0
+            ? '?' + rest.map((id) => `ex=${encodeURIComponent(id)}`).join('&')
+            : '';
+        navigate(`/sessions/run/${nextId}${qs}`, {
+          state: routineContext ?? undefined,
+          replace: true,
+        });
+        return;
+      }
+
+      // Si no hay más ejercicios pendientes, volver al inicio.
       setTimeout(() => navigate('/'), 1500);
     } catch (err: any) {
       setError('No se pudo guardar la sesión');
@@ -373,6 +433,11 @@ export function SessionRunner() {
   if (loading) return <div className="text-slate-400">Cargando...</div>;
   if (!exercise) return <div className="text-red-400">{error || 'No encontrado'}</div>;
 
+  const queueProgress =
+    totalInQueue > 0
+      ? `Ejercicio ${Math.min(finishedCount + 1, totalInQueue)} / ${totalInQueue} de la rutina`
+      : null;
+
   const isRepsManual = exercise.type === 'REPS';
   const isMixed = exercise.type === 'MIXED';
 
@@ -386,11 +451,19 @@ export function SessionRunner() {
   return (
     <div className="max-w-md mx-auto">
       <h1 className="text-2xl font-semibold mb-1">{exercise.name}</h1>
-      <p className="text-slate-400 mb-6">
+      <p className="text-slate-400 mb-1">
         {totalSetsLabel} juegos
         {exercise.durationPerSetSec ? ` · ${exercise.durationPerSetSec}s` : ''}
         {exercise.repsPerSet ? ` · ${exercise.repsPerSet} reps` : ''}
       </p>
+      {routineContext && queueProgress && (
+        <p className="text-violet-300 text-xs mb-6">
+          {queueProgress}
+          {routineContext.routineTitle ? ` · ${routineContext.routineTitle}` : ''}
+          {routineContext.dayLabel ? ` · ${routineContext.dayLabel}` : ''}
+        </p>
+      )}
+      {!queueProgress && <div className="mb-6" />}
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 text-center">
         {phase === 'idle' && (
@@ -586,11 +659,15 @@ export function SessionRunner() {
         {phase === 'done' && !(isMixed && !saving) && (
           <>
             <div className="text-emerald-400 text-sm uppercase tracking-wide font-semibold">
-              ¡Sesión completa!
+              ¡Ejercicio completo!
             </div>
             <div className="text-6xl font-bold my-6">✓</div>
             <div className="text-slate-400">
-              {saving ? 'Guardando...' : 'Guardado. Volviendo al inicio...'}
+              {saving
+                ? 'Guardando...'
+                : remainingQueue.length > 0
+                  ? `Guardado. Siguiente ejercicio en un momento...`
+                  : 'Guardado. Volviendo al inicio...'}
             </div>
           </>
         )}

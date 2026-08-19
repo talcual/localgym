@@ -83,14 +83,29 @@ export function Routines() {
       setError('Ese día no tiene ejercicios en esta rutina.');
       return;
     }
-    const firstWithExercise = day.items.find((it) => it.exerciseId);
-    if (!firstWithExercise || !firstWithExercise.exerciseId) {
+    const queue = day.items
+      .filter((it) => !!it.exerciseId)
+      .map((it) => it.exerciseId as string);
+    if (queue.length === 0) {
       setError(
         'Este día no tiene ejercicios importados todavía. Prueba con otro día.',
       );
       return;
     }
-    navigate(`/sessions/run/${firstWithExercise.exerciseId}`);
+    const [first, ...rest] = queue;
+    const remaining = rest
+      .map((id) => `ex=${encodeURIComponent(id)}`)
+      .join('&');
+    const qs = remaining ? `?${remaining}` : '';
+    navigate(`/sessions/run/${first}${qs}`, {
+      state: {
+        routineId: routine.id,
+        routineTitle: routine.title,
+        dayIndex,
+        dayLabel: day.dayLabel,
+        queue,
+      },
+    });
   }
 
   const activeRoutine = useMemo(
