@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { sessionsApi } from '../api';
 import { SessionLog } from '../api/types';
 import { formatDuration } from '../utils/time';
+import { isoDateInUserZone, formatInUserZone } from '../utils/timezone';
 
 function toDateInput(d: Date) {
-  return d.toISOString().slice(0, 10);
+  // El input `type=date` espera el día civil del usuario, no UTC.
+  return isoDateInUserZone(d);
 }
 
 export function SessionHistory() {
@@ -100,7 +102,14 @@ export function SessionHistory() {
                   {s.exercise?.name ?? 'Rutina'}
                 </div>
                 <div className="text-sm text-slate-400">
-                  {new Date(s.performedAt).toLocaleString()} ·{' '}
+                  {formatInUserZone(s.performedAt, {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}{' '}
+                  ·{' '}
                   {s.setsCompleted} juegos
                   {s.totalDurationSec
                     ? ` · ${formatDuration(s.totalDurationSec)}`

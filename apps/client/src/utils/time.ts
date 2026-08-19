@@ -1,3 +1,5 @@
+import { formatInUserZone, isoDateInUserZone } from './timezone';
+
 export function formatDuration(seconds: number): string {
   if (!seconds || seconds < 0) return '0s';
   const h = Math.floor(seconds / 3600);
@@ -16,8 +18,7 @@ export function formatTimer(seconds: number): string {
 }
 
 export function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString(undefined, {
+  return formatInUserZone(iso, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -25,8 +26,7 @@ export function formatDate(iso: string): string {
 }
 
 export function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, {
+  return formatInUserZone(iso, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -37,12 +37,9 @@ export function formatDateTime(iso: string): string {
 
 export function toDateInput(iso: string | null | undefined): string {
   if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  // Importante: usar la zona del usuario para que el día mostrado
+  // corresponda al día civil del usuario (no al día UTC).
+  return isoDateInUserZone(iso);
 }
 
 export function computeBmi(

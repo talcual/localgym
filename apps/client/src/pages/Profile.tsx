@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { usersApi } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { Sex, UserProfile } from '../api/types';
-import { computeBmi, toDateInput } from '../utils/time';
+import { computeBmi, toDateInput, formatDate } from '../utils/time';
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
   { value: 'MALE', label: 'Masculino' },
@@ -165,7 +165,7 @@ export function Profile() {
         </div>
         <div>
           <span className="text-slate-300">Miembro desde:</span>{' '}
-          {new Date(profile.createdAt).toLocaleDateString()}
+          {formatDate(profile.createdAt)}
         </div>
         {profile.heightCm && (
           <div className="mt-2">

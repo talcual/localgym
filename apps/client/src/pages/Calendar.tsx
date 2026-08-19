@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { statsApi, routinesApi } from '../api';
 import type { DailyCount, RoutineWithItems } from '../api';
 import { groupRoutineItemsByDay } from '../api/routines';
+import { isoDateInUserZone, formatInUserZone } from '../utils/timezone';
 
 interface CalendarDay {
   date: Date;
@@ -64,7 +65,7 @@ export function Calendar() {
     return days;
   }, [cursor, byDay, activeRoutine]);
 
-  const monthLabel = cursor.toLocaleDateString('es', {
+  const monthLabel = formatInUserZone(cursor, {
     month: 'long',
     year: 'numeric',
   });
@@ -161,7 +162,7 @@ export function Calendar() {
       {selectedDay && (
         <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
           <div className="text-sm font-medium">
-            {selectedDay.date.toLocaleDateString('es', {
+            {formatInUserZone(selectedDay.date, {
               weekday: 'long',
               day: 'numeric',
               month: 'long',
@@ -272,10 +273,9 @@ function Legend({ color, label }: { color: string; label: string }) {
 // ──────────────────────────────────────────────────────────────────────
 
 function isoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  // Importante: usar la zona horaria del usuario para que la celda del
+  // calendario coincida con el día civil del usuario, no con el UTC.
+  return isoDateInUserZone(d);
 }
 
 function shiftMonth(

@@ -27,6 +27,7 @@ import type {
 import type { RoutineWithItems, CreateRoutineInput } from '../api';
 import { BmiBar, bmiCategoryColor } from '../components/BmiBar';
 import { formatDuration } from '../utils/time';
+import { isoDateInUserZone } from '../utils/timezone';
 import { useOllamaStream, ollamaStructuredJson } from '../api/ollama';
 import {
   groupRoutineItemsByDay,
@@ -89,14 +90,11 @@ export function Dashboard() {
         ]) => {
           setExercises(exs);
           const today = new Date();
-          const y = today.getFullYear();
-          const m = String(today.getMonth() + 1).padStart(2, '0');
-          const d = String(today.getDate()).padStart(2, '0');
-          const key = `${y}-${m}-${d}`;
+          // Usar la zona horaria del usuario para identificar el "día de hoy"
+          // (no UTC) — esto es importante en zonas como UTC-5.
+          const key = isoDateInUserZone(today);
           setTodaySessions(
-            allSessions.filter(
-              (s) => new Date(s.performedAt).toISOString().slice(0, 10) === key,
-            ),
+            allSessions.filter((s) => isoDateInUserZone(s.performedAt) === key),
           );
           setStats(summary);
           setProgress(prog);
