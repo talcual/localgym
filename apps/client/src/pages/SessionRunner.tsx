@@ -78,6 +78,27 @@ export function SessionRunner() {
 
   useEffect(() => {
     if (!exerciseId) return;
+    // Reset completo del estado cada vez que cambia el ejercicio.
+    // Esto es necesario cuando navegamos entre ejercicios de una misma rutina
+    // con `replace: true`: React Router reusa el componente, así que sin reset
+    // el `phase` se quedaría en 'done' del ejercicio anterior.
+    setLoading(true);
+    setError(null);
+    setPhase('idle');
+    setCurrentSet(0);
+    setRemaining(0);
+    setSaving(false);
+    setRepInput('');
+    setMixedRepsTotal('');
+    setsCompletedRef.current = 0;
+    setIndexRef.current = 0;
+    phaseRef.current = 'idle';
+    endsAtRef.current = null;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+
     exercisesApi
       .get(exerciseId)
       .then((ex) => {
