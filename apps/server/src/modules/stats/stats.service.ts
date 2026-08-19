@@ -30,7 +30,9 @@ export interface ExerciseAggregate {
 export class StatsService {
   constructor(@Inject(DATABASE) private readonly db: Client) {}
 
-  async summary(userId: string): Promise<SummaryStats> {
+  async summary(userId: string, tz?: string): Promise<SummaryStats> {
+    const zone = sanitizeTimeZone(tz);
+
     const res = await this.db.execute({
       sql: `SELECT sets_completed, total_duration_sec, total_reps, performed_at, exercise_id
             FROM session_logs WHERE user_id = ?`,
@@ -57,12 +59,12 @@ export class StatsService {
     for (const row of res.rows) {
       totalDurationSec += Number(row.total_duration_sec);
       totalReps += Number(row.total_reps);
-      days.add(toDateKey(new Date(String(row.performed_at))));
+      days.add(toDateKey(new Date(String(row.performed_at)), zone));
       exercises.add(String(row.exercise_id));
     }
 
     const sortedDays = Array.from(days).sort();
-    const { current, best } = computeStreaks(sortedDays);
+    const { current, best } = computeStreaks(sortedDays, zone);
 
     return {
       totalSessions,
@@ -74,7 +76,9 @@ export class StatsService {
     };
   }
 
-  async byDay(userId: string, days: number): Promise<DailyCount[]> {
+  async byDay(userId: string, days: number, tz?: string): Promise<DailyCount[]> {
+    const zone = sanitizeTimeZone(tz);
+
     const since = new Date();
     since.setDate(since.getDate() - (days - 1));
     since.setHours(0, 0, 0, 0);
@@ -90,11 +94,11 @@ export class StatsService {
     for (let i = 0; i < days; i++) {
       const d = new Date(since);
       d.setDate(since.getDate() + i);
-      buckets.set(toDateKey(d), { sessions: 0, durationSec: 0 });
+      buckets.set(toDateKey(d, zone), { sessions: 0, durationSec: 0 });
     }
 
     for (const row of res.rows) {
-      const key = toDateKey(new Date(String(row.performed_at)));
+      const key = toDateKey(new Date(String(row.performed_at)), zone);
       const bucket = buckets.get(key);
       if (bucket) {
         bucket.sessions += 1;
@@ -140,16 +144,50 @@ export class StatsService {
   }
 }
 
-function toDateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+/**
+ * Valida una zona horaria IANA. Si no se pasa o es inválida, devuelve undefined
+ * (se usará la zona del servidor como antes).
+ */
+function sanitizeTimeZone(tz?: string | null): string | undefined {
+  if (!tz || typeof tz !== 'string') return undefined;
+  const trimmed = tz.trim();
+  if (!trimmed) return undefined;
+  try {
+    // Lanzará si la zona no es IANA válida.
+    new Intl.DateTimeFormat('en-US', { timeZone: trimmed }).format(new Date());
+    return trimmed;
+  } catch {
+    return undefined;
+  }
 }
 
-function computeStreaks(sortedDays: string[]): { current: number; best: number } {
+/**
+ * Devuelve YYYY-MM-DD interpretado en la zona indicada (o la del servidor).
+ * Usa `Intl.DateTimeFormat.formatToParts` para no depender de getHours(),
+ * que reflejaría la zona del servidor.
+ */
+function toDateKey(d: Date, zone?: string): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zone || undefined,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+function todayKey(zone?: string): string {
+  return toDateKey(new Date(), zone);
+}
+
+function computeStreaks(
+  sortedDays: string[],
+  zone?: string,
+): { current: number; best: number } {
   if (sortedDays.length === 0) return { current: 0, best: 0 };
-  const dates = sortedDays.map((d) => new Date(d + 'T00:00:00'));
+  const dates = sortedDays.map((d) => new Date(d + 'T12:00:00Z'));
   let best = 1;
   let run = 1;
   for (let i = 1; i < dates.length; i++) {
@@ -165,22 +203,47 @@ function computeStreaks(sortedDays: string[]): { current: number; best: number }
   }
 
   let current = 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const last = dates[dates.length - 1];
-  const diffFromLast = Math.round(
-    (today.getTime() - last.getTime()) / 86400000,
-  );
-  if (diffFromLast === 0 || diffFromLast === 1) {
+  const today = todayKey(zone);
+  const last = sortedDays[sortedDays.length - 1];
+  if (last === today || daysBetween(last, today, zone) === 1) {
     current = 1;
-    for (let i = dates.length - 1; i > 0; i--) {
-      const diff = Math.round(
-        (dates[i].getTime() - dates[i - 1].getTime()) / 86400000,
-      );
+    for (let i = sortedDays.length - 1; i > 0; i--) {
+      const diff = daysBetween(sortedDays[i - 1], sortedDays[i], zone);
       if (diff === 1) current += 1;
       else break;
     }
   }
 
   return { current, best };
+}
+
+function daysBetween(a: string, b: string, zone?: string): number {
+  // Diferencia de días entre dos YYYY-MM-DD interpretadas en `zone`.
+  const [ay, am, ad] = a.split('-').map(Number);
+  const [by, bm, bd] = b.split('-').map(Number);
+  const aDate = new Date(Date.UTC(ay, am - 1, ad, 12));
+  const bDate = new Date(Date.UTC(by, bm - 1, bd, 12));
+  const offsetA = tzOffsetMinutes(aDate, zone);
+  const offsetB = tzOffsetMinutes(bDate, zone);
+  const aMid = aDate.getTime() + offsetA * 60_000;
+  const bMid = bDate.getTime() + offsetB * 60_000;
+  return Math.round((bMid - aMid) / 86400000);
+}
+
+function tzOffsetMinutes(d: Date, zone?: string): number {
+  // Minutos de diferencia entre UTC y la zona del usuario al instante `d`.
+  // Para Etc/GMT+5 (UTC-5) la diferencia es -300.
+  if (!zone) return -d.getTimezoneOffset();
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    timeZoneName: 'shortOffset',
+  });
+  const parts = fmt.formatToParts(d);
+  const part = parts.find((p) => p.type === 'timeZoneName');
+  const m = part?.value?.match(/GMT([+-]\d{1,2})(?::(\d{2}))?/);
+  if (!m) return 0;
+  const hours = parseInt(m[1], 10);
+  const minutes = m[2] ? parseInt(m[2], 10) : 0;
+  // Para Etc/GMT+5, "GMT+5" significa UTC-5, así que invertimos el signo.
+  return -(hours * 60 + minutes);
 }

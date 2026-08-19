@@ -1,4 +1,5 @@
 import { api } from './client';
+import { getUserTimeZone } from '../utils/timezone';
 import {
   AuthResponse,
   BodyMeasurement,
@@ -74,9 +75,16 @@ export const catalogApi = {
 };
 
 export const statsApi = {
-  summary: () => api.get<SummaryStats>('/stats/summary').then((r) => r.data),
+  summary: () =>
+    api
+      .get<SummaryStats>('/stats/summary', { params: { tz: getUserTimeZone() } })
+      .then((r) => r.data),
   byDay: (days = 30) =>
-    api.get<DailyCount[]>('/stats/by-day', { params: { days } }).then((r) => r.data),
+    api
+      .get<DailyCount[]>('/stats/by-day', {
+        params: { days, tz: getUserTimeZone() },
+      })
+      .then((r) => r.data),
   byExercise: () =>
     api.get<ExerciseAggregate[]>('/stats/by-exercise').then((r) => r.data),
 };

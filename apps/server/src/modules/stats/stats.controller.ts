@@ -10,17 +10,21 @@ export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 
   @Get('summary')
-  summary(@CurrentUser() current: { userId: string }) {
-    return this.statsService.summary(current.userId);
+  summary(
+    @CurrentUser() current: { userId: string },
+    @Query('tz') tz?: string,
+  ) {
+    return this.statsService.summary(current.userId, tz);
   }
 
   @Get('by-day')
   byDay(
     @CurrentUser() current: { userId: string },
     @Query('days') days?: string,
+    @Query('tz') tz?: string,
   ) {
     const parsed = Math.max(1, Math.min(365, Number(days) || 30));
-    return this.statsService.byDay(current.userId, parsed);
+    return this.statsService.byDay(current.userId, parsed, tz);
   }
 
   @Get('by-exercise')
