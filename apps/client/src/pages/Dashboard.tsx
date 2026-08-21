@@ -1391,92 +1391,92 @@ function RoutinesListCard({
     );
   }
 
-  return (
-    <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600/20 text-violet-400">
-            <Sparkles className="h-4 w-4" aria-hidden />
-          </span>
-          <h2 className="font-semibold">Mis rutinas</h2>
-        </div>
-        <span className="text-xs text-slate-500">{routines.length} guardadas</span>
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {routines.map((r) => {
-          const days = groupRoutineItemsByDay(r.items);
-          const isActive = r.id === activeRoutineId;
-          return (
-            <div
-              key={r.id}
-              className={
-                'flex flex-col rounded-lg border bg-slate-900/40 p-3 ' +
-                (isActive
-                  ? 'border-emerald-500/60 ring-1 ring-emerald-500/30'
-                  : 'border-slate-800')
-              }
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-slate-100">
-                    {r.title}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-slate-400">
-                    {routineGoalLabel(r.goal)} · {routineLevelLabel(r.level)} · {r.daysPerWeek} días
-                  </div>
-                </div>
-                {isActive ? (
-                  <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                    Activa
-                  </span>
-                ) : null}
-              </div>
+ // return (
+    // <div className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
+    //   <div className="flex items-center justify-between">
+    //     <div className="flex items-center gap-2">
+    //       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600/20 text-violet-400">
+    //         <Sparkles className="h-4 w-4" aria-hidden />
+    //       </span>
+    //       <h2 className="font-semibold">Mis rutinas</h2>
+    //     </div>
+    //     <span className="text-xs text-slate-500">{routines.length} guardadas</span>
+    //   </div>
+    //   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    //     {routines.map((r) => {
+    //       const days = groupRoutineItemsByDay(r.items);
+    //       const isActive = r.id === activeRoutineId;
+    //       return (
+    //         <div
+    //           key={r.id}
+    //           className={
+    //             'flex flex-col rounded-lg border bg-slate-900/40 p-3 ' +
+    //             (isActive
+    //               ? 'border-emerald-500/60 ring-1 ring-emerald-500/30'
+    //               : 'border-slate-800')
+    //           }
+    //         >
+    //           <div className="flex items-start justify-between gap-2">
+    //             <div className="min-w-0">
+    //               <div className="truncate text-sm font-medium text-slate-100">
+    //                 {r.title}
+    //               </div>
+    //               <div className="mt-0.5 text-[11px] text-slate-400">
+    //                 {routineGoalLabel(r.goal)} · {routineLevelLabel(r.level)} · {r.daysPerWeek} días
+    //               </div>
+    //             </div>
+    //             {isActive ? (
+    //               <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+    //                 Activa
+    //               </span>
+    //             ) : null}
+    //           </div>
 
-              <ul className="mt-2 space-y-1.5 text-xs">
-                {days.slice(0, r.daysPerWeek).map((d) => (
-                  <li key={d.dayIndex} className="text-slate-300">
-                    <span className="font-medium">{d.dayLabel}:</span>{' '}
-                    <span className="text-slate-400">
-                      {d.items.length} ejercicio{d.items.length === 1 ? '' : 's'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+    //           <ul className="mt-2 space-y-1.5 text-xs">
+    //             {days.slice(0, r.daysPerWeek).map((d) => (
+    //               <li key={d.dayIndex} className="text-slate-300">
+    //                 <span className="font-medium">{d.dayLabel}:</span>{' '}
+    //                 <span className="text-slate-400">
+    //                   {d.items.length} ejercicio{d.items.length === 1 ? '' : 's'}
+    //                 </span>
+    //               </li>
+    //             ))}
+    //           </ul>
 
-              <div className="mt-auto flex items-center gap-2 pt-3">
-                {isActive ? (
-                  <button
-                    type="button"
-                    onClick={deactivate}
-                    disabled={busyId !== null}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-amber-500 hover:text-amber-200 disabled:opacity-50"
-                  >
-                    {busyId === '__deactivate' ? 'Desactivando…' : 'Desactivar'}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => activate(r.id)}
-                    disabled={busyId !== null}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:opacity-50"
-                  >
-                    {busyId === r.id ? 'Activando…' : 'Activar'}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => remove(r.id)}
-                  disabled={busyId !== null}
-                  title="Borrar rutina"
-                  className="inline-flex items-center justify-center rounded-lg border border-slate-700 px-2 py-1.5 text-xs text-slate-300 hover:border-rose-500 hover:text-rose-300 disabled:opacity-50"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+    //           <div className="mt-auto flex items-center gap-2 pt-3">
+    //             {isActive ? (
+    //               <button
+    //                 type="button"
+    //                 onClick={deactivate}
+    //                 disabled={busyId !== null}
+    //                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-amber-500 hover:text-amber-200 disabled:opacity-50"
+    //               >
+    //                 {busyId === '__deactivate' ? 'Desactivando…' : 'Desactivar'}
+    //               </button>
+    //             ) : (
+    //               <button
+    //                 type="button"
+    //                 onClick={() => activate(r.id)}
+    //                 disabled={busyId !== null}
+    //                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium shadow-lg shadow-violet-950/30 transition hover:bg-violet-500 disabled:opacity-50"
+    //               >
+    //                 {busyId === r.id ? 'Activando…' : 'Activar'}
+    //               </button>
+    //             )}
+    //             <button
+    //               type="button"
+    //               onClick={() => remove(r.id)}
+    //               disabled={busyId !== null}
+    //               title="Borrar rutina"
+    //               className="inline-flex items-center justify-center rounded-lg border border-slate-700 px-2 py-1.5 text-xs text-slate-300 hover:border-rose-500 hover:text-rose-300 disabled:opacity-50"
+    //             >
+    //               ×
+    //             </button>
+    //           </div>
+    //         </div>
+    //       );
+    //     })}
+    //   </div>
+    // </div>
+  //);
 }
