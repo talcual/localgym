@@ -140,6 +140,15 @@ export function Navbar() {
             ›
           </span>
         </NavLink>
+        <button
+          onClick={() => {
+            logout();
+            navigate('/login');
+          }}
+          className="mt-2 w-full text-sm bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-md"
+        >
+          Salir
+        </button>
       </div>
       <div className="flex gap-1 overflow-x-auto px-2 pb-2 lg:hidden">
         <Navigation items={items} />
