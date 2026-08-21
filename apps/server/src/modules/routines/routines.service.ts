@@ -274,7 +274,10 @@ export class RoutinesService {
     id: string,
   ): Promise<RoutineWithItems> {
     const existing = await this.findOne(actorUserId, actorRole, id);
-    await this.assertCanEditRoutine(actorUserId, actorRole, existing);
+    // `activate` no es edición de contenido: el cliente debe poder activar
+    // (o desactivar) una rutina asignada por su instructor para empezar a
+    // entrenar con ella. Por eso usamos una comprobación más laxa.
+    await this.assertCanActivateRoutine(actorUserId, actorRole, existing);
     await this.db.batch(
       [
         {
@@ -351,6 +354,34 @@ export class RoutinesService {
     }
     throw new ForbiddenException(
       'No autorizado para editar esta rutina',
+    );
+  }
+
+  /**
+   * Comprobación más laxa que `assertCanEditRoutine`: permite al cliente
+   * dueño activar/desactivar incluso rutinas asignadas (porque necesita
+   * elegir con cuál entrenar). Las ediciones de contenido siguen
+   * bloqueadas por `assertCanEditRoutine`.
+   *
+   * Reglas:
+   *  - Admin: siempre.
+   *  - Instructor autor: puede activar/desactivar en nombre del cliente.
+   *  - Cliente dueño: puede activar/desactivar cualquier rutina suya.
+   *  - Cualquier otro: 403.
+   */
+  private async assertCanActivateRoutine(
+    actorUserId: string,
+    actorRole: UserRole,
+    routine: RoutineWithItems,
+  ): Promise<void> {
+    if (actorRole === 'ADMIN') return;
+    const isOwner = routine.userId === actorUserId;
+    const isAuthor =
+      routine.writtenByInstructorId === actorUserId &&
+      Boolean(routine.writtenByInstructorId);
+    if (isOwner || isAuthor) return;
+    throw new ForbiddenException(
+      'No autorizado para activar esta rutina',
     );
   }
 

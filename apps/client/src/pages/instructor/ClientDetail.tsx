@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Calendar, X } from 'lucide-react';
+import { Calendar, X, Power, PowerOff, Unlink } from 'lucide-react';
 import {
   assignmentsApi,
   progressApi,
@@ -28,6 +28,7 @@ export function ClientDetail() {
   const [recent, setRecent] = useState<SessionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState<RoutineWithItems | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   async function refresh() {
     if (!clientId) return;
@@ -66,6 +67,57 @@ export function ClientDetail() {
   const instructorRoutines = routines.filter(
     (r) => r.writtenByInstructorId != null,
   );
+
+  async function handleUnassign(r: RoutineWithItems) {
+    const a = assignments.find((x) => x.routineId === r.id);
+    if (!a) return;
+    if (
+      !confirm(
+        `¿Quitar la asignación de "${r.title}"? El cliente volverá a poder editarla y elegir otra rutina como activa.`,
+      )
+    ) {
+      return;
+    }
+    setBusyId(r.id);
+    try {
+      await assignmentsApi.archive(a.id);
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleActivateForClient(r: RoutineWithItems) {
+    setBusyId(r.id);
+    try {
+      await routinesApi.activate(r.id);
+      await refresh();
+    } catch (err) {
+      alert(
+        (err as Error).message ||
+          (err as any)?.response?.data?.message ||
+          'No se pudo activar la rutina',
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleDeactivateForClient(r: RoutineWithItems) {
+    setBusyId(r.id);
+    try {
+      await routinesApi.deactivate();
+      await refresh();
+    } catch (err) {
+      alert(
+        (err as Error).message ||
+          (err as any)?.response?.data?.message ||
+          'No se pudo desactivar',
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -168,13 +220,41 @@ export function ClientDetail() {
                       )}
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex flex-wrap shrink-0 items-center gap-1.5">
                     <Link
                       to={`/instructor/routines/${r.id}/edit`}
                       className="text-xs text-violet-300 underline"
                     >
                       Editar
                     </Link>
+                    {a && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={busyId === r.id || r.isActive}
+                          onClick={() => handleDeactivateForClient(r)}
+                          className="inline-flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-amber-500 hover:text-amber-200 disabled:opacity-40"
+                          title={
+                            r.isActive
+                              ? 'Esta rutina ya está activa'
+                              : 'Desactivar para el cliente'
+                          }
+                        >
+                          <PowerOff className="h-3.5 w-3.5" />
+                          Desactivar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busyId === r.id || r.isActive}
+                          onClick={() => handleActivateForClient(r)}
+                          className="inline-flex items-center gap-1 rounded border border-emerald-700/50 bg-emerald-950/30 px-2 py-1 text-xs font-medium text-emerald-200 hover:border-emerald-500 hover:bg-emerald-900/40 disabled:opacity-40"
+                          title="Activar para el cliente"
+                        >
+                          <Power className="h-3.5 w-3.5" />
+                          Activar
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={() => setAssigning(r)}
@@ -183,6 +263,18 @@ export function ClientDetail() {
                       <Calendar className="h-3.5 w-3.5" />
                       {a ? 'Reasignar' : 'Asignar'}
                     </button>
+                    {a && (
+                      <button
+                        type="button"
+                        disabled={busyId === r.id}
+                        onClick={() => handleUnassign(r)}
+                        className="inline-flex items-center gap-1 rounded border border-rose-700/50 bg-rose-950/30 px-2 py-1 text-xs font-medium text-rose-200 hover:border-rose-500 hover:bg-rose-900/40 disabled:opacity-40"
+                        title="Quitar la asignación"
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                        Quitar
+                      </button>
+                    )}
                   </div>
                 </li>
               );

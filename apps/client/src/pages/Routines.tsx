@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sparkles, Play } from 'lucide-react';
-import { routinesApi, exercisesApi } from '../api';
-import type { Exercise, RoutineWithItems } from '../api';
+import { catalogApi, exercisesApi, routinesApi } from '../api';
+import type { CatalogExercise, Exercise, RoutineWithItems } from '../api';
 import {
   groupRoutineItemsByDay,
   routineGoalLabel,
@@ -20,6 +20,9 @@ export function Routines() {
   const [exerciseMap, setExerciseMap] = useState<Map<string, Exercise>>(
     new Map(),
   );
+  const [catalogMap, setCatalogMap] = useState<Map<string, CatalogExercise>>(
+    new Map(),
+  );
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -34,6 +37,27 @@ export function Routines() {
       const m = new Map<string, Exercise>();
       for (const e of exercises) m.set(e.id, e);
       setExerciseMap(m);
+
+      // Cargar del catálogo solo los items que aparecen en las rutinas
+      // (las rutinas del instructor suelen referenciar catalogId).
+      const catalogIds = new Set<string>();
+      for (const r of list) {
+        for (const it of r.items) {
+          if (it.catalogId) catalogIds.add(it.catalogId);
+        }
+      }
+      if (catalogIds.size > 0) {
+        try {
+          const all = await catalogApi.list();
+          const cm = new Map<string, CatalogExercise>();
+          for (const c of all) if (catalogIds.has(c.id)) cm.set(c.id, c);
+          setCatalogMap(cm);
+        } catch {
+          // ignore
+        }
+      } else {
+        setCatalogMap(new Map());
+      }
     } catch (err) {
       setError((err as Error).message || 'No se pudieron cargar las rutinas.');
     } finally {
@@ -149,6 +173,7 @@ export function Routines() {
         <RoutineCard
           routine={activeRoutine}
           exerciseMap={exerciseMap}
+          catalogMap={catalogMap}
           isActive
           busyId={busyId}
           onActivate={activate}
@@ -188,6 +213,7 @@ export function Routines() {
                       key={r.id}
                       routine={r}
                       exerciseMap={exerciseMap}
+                      catalogMap={catalogMap}
                       isActive={false}
                       busyId={busyId}
                       onActivate={activate}
@@ -218,6 +244,7 @@ export function Routines() {
                       key={r.id}
                       routine={r}
                       exerciseMap={exerciseMap}
+                      catalogMap={catalogMap}
                       isActive={false}
                       busyId={busyId}
                       onActivate={activate}
@@ -238,6 +265,7 @@ export function Routines() {
 function RoutineCard({
   routine,
   exerciseMap,
+  catalogMap,
   isActive,
   busyId,
   onActivate,
@@ -248,6 +276,7 @@ function RoutineCard({
 }: {
   routine: RoutineWithItems;
   exerciseMap: Map<string, Exercise>;
+  catalogMap: Map<string, CatalogExercise>;
   isActive: boolean;
   busyId: string | null;
   onActivate: (id: string) => void | Promise<void>;
@@ -359,15 +388,24 @@ function RoutineCard({
                   const ex = it.exerciseId
                     ? exerciseMap.get(it.exerciseId)
                     : undefined;
-                  const name = ex?.name ?? 'Ejercicio';
-                  const meta = describeItemMeta(it, ex);
+                  const catEx =
+                    !ex && it.catalogId
+                      ? catalogMap.get(it.catalogId)
+                      : undefined;
+                  const name =
+                    ex?.name ??
+                    catEx?.name ??
+                    (it.catalogId
+                      ? 'Ejercicio del catálogo'
+                      : 'Ejercicio');
+                  const meta = describeItemMeta(it, ex ?? catEx);
                   return (
                     <li
                       key={it.id}
                       className="flex items-center justify-between gap-2"
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <ExerciseSourceBadge source={ex?.source} />
+                        <ExerciseSourceBadge source={ex?.source ?? (catEx ? 'catalog' : undefined)} />
                         <span className="truncate text-slate-200">{name}</span>
                       </span>
                       <span className="shrink-0 text-[11px] text-slate-500">
@@ -444,7 +482,7 @@ function describeItemMeta(
     durationPerSetSec: number | null;
     restSec: number | null;
   },
-  ex?: Exercise,
+  ex?: Exercise | CatalogExercise,
 ): string {
   const sets = it.sets ?? ex?.sets ?? null;
   const reps = it.reps ?? ex?.repsPerSet ?? null;
@@ -462,7 +500,7 @@ function describeItemMeta(
 function ExerciseSourceBadge({
   source,
 }: {
-  source?: Exercise['source'];
+  source?: Exercise['source'] | 'catalog';
 }) {
   if (!source) {
     return (
@@ -477,6 +515,7 @@ function ExerciseSourceBadge({
   const map = {
     manual: { label: 'Propio', cls: 'bg-slate-700 text-slate-200' },
     ai_import: { label: 'AI', cls: 'bg-violet-500/20 text-violet-200' },
+    catalog: { label: 'Catálogo', cls: 'bg-sky-500/20 text-sky-200' },
   } as const;
   const v = map[source];
   return (
@@ -487,7 +526,9 @@ function ExerciseSourceBadge({
       title={
         source === 'ai_import'
           ? 'Importado del catálogo por AI Couch'
-          : 'Creado manualmente'
+          : source === 'catalog'
+            ? 'Del catálogo de tu instructor'
+            : 'Creado manualmente'
       }
     >
       {v.label}
