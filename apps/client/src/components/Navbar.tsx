@@ -23,6 +23,18 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
       : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
   }`;
 
+const linkClassInstructor = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+    isActive
+      ? 'bg-violet-600/35 text-white shadow-[inset_0_0_20px_rgba(139,92,246,0.25)]'
+      : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+  }`;
+
+/**
+ * Navbar del Shell de cliente. Los instructores también la ven completa
+ * (porque el instructor también entrena) + un link extra "Panel instructor"
+ * que los lleva al InstructorShell.
+ */
 const studentNavigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
   ['Inicio', '/app', Home],
   ['Mis rutinas', '/routines', ListChecks],
@@ -36,25 +48,39 @@ const studentNavigation: ReadonlyArray<readonly [string, string, LucideIcon]> = 
   ['Ajustes', '/profile', SettingsIcon],
 ];
 
-const instructorNavigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
+const instructorExtraNavigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
   ['Panel instructor', '/instructor', Send],
-  ['Mis rutinas', '/routines', ListChecks],
-  ['Mensajes', '/instructor/messages', Send],
-  ['Ajustes', '/profile', SettingsIcon],
 ];
 
 function Navigation({
   items,
+  extraItems = [],
 }: {
   items: ReadonlyArray<readonly [string, string, LucideIcon]>;
+  extraItems?: ReadonlyArray<readonly [string, string, LucideIcon]>;
 }) {
   return (
-    <nav className="flex gap-1 lg:block lg:space-y-1">
+    <nav className="flex flex-col gap-1">
+      {extraItems.length > 0 && (
+        <div className="mb-2 space-y-1 border-b border-slate-800/80 pb-2">
+          {extraItems.map(([label, to, Icon]) => (
+            <NavLink
+              key={`${label}-${to}`}
+              to={to}
+              end={to === '/instructor'}
+              className={linkClassInstructor}
+            >
+              <Icon className="h-4 w-4 shrink-0 text-violet-300" aria-hidden />
+              {label}
+            </NavLink>
+          ))}
+        </div>
+      )}
       {items.map(([label, to, Icon]) => (
         <NavLink
           key={`${label}-${to}`}
           to={to}
-          end={to === '/app' || to === '/instructor'}
+          end={to === '/app'}
           className={linkClass}
         >
           <Icon className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
@@ -69,9 +95,8 @@ export function Navbar() {
   const { user, logout, isInstructor } = useAuth();
   const navigate = useNavigate();
 
-  const items = isInstructor ? instructorNavigation : studentNavigation;
-  const BrandIcon = isInstructor ? Send : Dumbbell;
-
+  // Instructor ve TODO lo del cliente + el acceso al panel instructor.
+  // NO pierde su experiencia personal de entrenamiento.
   return (
     <aside className="border-b border-slate-800/80 bg-[#091121] lg:flex lg:min-h-screen lg:w-64 lg:flex-col lg:border-b-0 lg:border-r">
       <div className="flex items-center justify-between px-4 py-4 lg:px-5 lg:pt-5">
@@ -84,7 +109,7 @@ export function Navbar() {
                 : 'bg-indigo-600 shadow-indigo-900/40')
             }
           >
-            <BrandIcon className="h-4 w-4 text-white" aria-hidden />
+            <Dumbbell className="h-4 w-4 text-white" aria-hidden />
           </div>
           <span className="text-lg font-semibold">
             {isInstructor ? 'ModoFit · Pro' : 'ModoFit'}
@@ -120,7 +145,10 @@ export function Navbar() {
         </div>
       )}
       <div className="hidden flex-1 px-3 lg:block">
-        <Navigation items={items} />
+        <Navigation
+          items={studentNavigation}
+          extraItems={isInstructor ? instructorExtraNavigation : []}
+        />
       </div>
       <div className="hidden border-t border-slate-800/80 p-3 lg:block">
         <NavLink
@@ -140,18 +168,12 @@ export function Navbar() {
             ›
           </span>
         </NavLink>
-        <button
-          onClick={() => {
-            logout();
-            navigate('/login');
-          }}
-          className="mt-2 w-full text-sm bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-md"
-        >
-          Salir
-        </button>
       </div>
       <div className="flex gap-1 overflow-x-auto px-2 pb-2 lg:hidden">
-        <Navigation items={items} />
+        <Navigation
+          items={studentNavigation}
+          extraItems={isInstructor ? instructorExtraNavigation : []}
+        />
       </div>
     </aside>
   );

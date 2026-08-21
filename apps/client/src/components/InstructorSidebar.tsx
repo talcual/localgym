@@ -65,6 +65,15 @@ export function InstructorSidebar() {
         </span>
       </div>
 
+      <div className="px-3 pb-3 lg:px-5">
+        <NavLink
+          to="/app"
+          className="flex items-center justify-center gap-2 rounded-lg border border-violet-700/40 bg-violet-950/30 px-3 py-2 text-xs font-medium text-violet-200 transition hover:border-violet-500 hover:bg-violet-900/40"
+        >
+          ← Volver a mi entrenamiento
+        </NavLink>
+      </div>
+
       <div className="hidden flex-1 px-3 lg:block">
         <Navigation />
       </div>
