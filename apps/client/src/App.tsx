@@ -6,6 +6,7 @@ import { InstructorShell } from './components/InstructorShell';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { AuthShell } from './components/AuthShell';
 import { Dashboard } from './pages/Dashboard';
 import { ExercisesList } from './pages/ExercisesList';
 import { ExerciseForm } from './pages/ExerciseForm';
@@ -53,8 +54,22 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route
+        path="/login"
+        element={
+          <AuthShell side="login">
+            <Login />
+          </AuthShell>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <AuthShell side="register">
+            <Register />
+          </AuthShell>
+        }
+      />
       <Route
         path="/accept-invitation"
         element={

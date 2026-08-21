@@ -104,23 +104,21 @@ export function Register({ onSwitch }: { onSwitch?: () => void }) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 transition rounded-lg py-2 font-medium"
+          className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 transition rounded-lg py-2.5 font-medium text-sm"
         >
           {loading ? 'Creando...' : 'Crear cuenta'}
         </button>
       </form>
-      {onSwitch && (
-        <p className="text-sm text-slate-400 mt-6 text-center">
-          ¿Ya tienes cuenta?{' '}
-          <button
-            type="button"
-            onClick={onSwitch}
-            className="text-brand-400 hover:underline"
-          >
-            Inicia sesión
-          </button>
-        </p>
-      )}
+      <p className="text-sm text-slate-400 mt-6 text-center">
+        ¿Ya tienes cuenta?{' '}
+        <button
+          type="button"
+          onClick={onSwitch ?? (() => navigate('/login'))}
+          className="text-brand-400 hover:underline font-medium"
+        >
+          Inicia sesión
+        </button>
+      </p>
     </div>
   );
 }

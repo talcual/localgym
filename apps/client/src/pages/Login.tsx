@@ -26,9 +26,9 @@ export function Login({ onSwitch }: { onSwitch?: () => void }) {
 
   return (
     <div>
-      <h2 className="text-lg font-medium mb-1">Iniciar sesión</h2>
+      <h2 className="text-2xl font-semibold tracking-tight">Iniciar sesión</h2>
       <p className="text-sm text-slate-400 mb-6">
-        Accede para registrar tu rutina
+        Accede para registrar tu rutina y seguir tu progreso.
       </p>
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
@@ -38,18 +38,22 @@ export function Login({ onSwitch }: { onSwitch?: () => void }) {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            placeholder="tu@correo.com"
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         <div>
-          <label className="block text-sm text-slate-300 mb-1">Contraseña</label>
+          <label className="block text-sm text-slate-300 mb-1">
+            Contraseña
+          </label>
           <input
             type="password"
             required
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            placeholder="Mínimo 6 caracteres"
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
         {error && (
@@ -60,23 +64,21 @@ export function Login({ onSwitch }: { onSwitch?: () => void }) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 transition rounded-lg py-2 font-medium"
+          className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 transition rounded-lg py-2.5 font-medium text-sm"
         >
           {loading ? 'Entrando...' : 'Entrar'}
         </button>
       </form>
-      {onSwitch && (
-        <p className="text-sm text-slate-400 mt-6 text-center">
-          ¿No tienes cuenta?{' '}
-          <button
-            type="button"
-            onClick={onSwitch}
-            className="text-brand-400 hover:underline"
-          >
-            Regístrate
-          </button>
-        </p>
-      )}
+      <p className="text-sm text-slate-400 mt-6 text-center">
+        ¿No tienes cuenta?{' '}
+        <button
+          type="button"
+          onClick={onSwitch ?? (() => navigate('/register'))}
+          className="text-brand-400 hover:underline font-medium"
+        >
+          Regístrate
+        </button>
+      </p>
     </div>
   );
 }
