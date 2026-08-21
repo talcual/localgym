@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid';
 import * as bcrypt from 'bcrypt';
 
 import { DATABASE } from '../../database/database.tokens';
-import { Sex, User } from '../../database/types';
+import { Sex, User, UserRole } from '../../database/types';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
@@ -33,12 +33,15 @@ export class UsersService {
     email: string,
     password: string,
     displayName: string,
+    role: UserRole = 'CLIENT',
   ): Promise<User> {
     const passwordHash = await bcrypt.hash(password, 10);
     const id = uuid();
+    const isInstructor = role === 'INSTRUCTOR' || role === 'ADMIN' ? 1 : 0;
     await this.db.execute({
-      sql: 'INSERT INTO users (id, email, password_hash, display_name) VALUES (?, ?, ?, ?)',
-      args: [id, email, passwordHash, displayName],
+      sql: `INSERT INTO users (id, email, password_hash, display_name, role, is_instructor)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [id, email, passwordHash, displayName, role, isInstructor],
     });
     const user = await this.findById(id);
     if (!user) throw new Error('Error al crear usuario');
@@ -74,6 +77,7 @@ export class UsersService {
 }
 
 function mapUser(row: any): User {
+  const role = (row.role ?? 'CLIENT') as UserRole;
   return {
     id: String(row.id),
     email: String(row.email),
@@ -82,6 +86,8 @@ function mapUser(row: any): User {
     heightCm: row.height_cm == null ? null : Number(row.height_cm),
     sex: (row.sex ?? null) as Sex | null,
     birthdate: row.birthdate == null ? null : String(row.birthdate),
+    role,
+    isInstructor: Number(row.is_instructor ?? 0) === 1 || role === 'INSTRUCTOR' || role === 'ADMIN',
     createdAt: String(row.created_at),
   };
 }

@@ -5,11 +5,13 @@ import {
   Get,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { UserRole } from '../../database/types';
 import { MeasurementsService } from './measurements.service';
 import { CreateMeasurementDto } from './dto/create-measurement.dto';
 
@@ -21,28 +23,43 @@ export class MeasurementsController {
   ) {}
 
   @Get()
-  list(@CurrentUser() current: { userId: string }) {
-    return this.measurementsService.list(current.userId);
+  list(
+    @CurrentUser() current: { userId: string; role: UserRole },
+    @Query('clientId') clientId?: string,
+  ) {
+    const acting = clientId ?? current.userId;
+    return this.measurementsService.list(current.userId, current.role, acting);
   }
 
   @Get('latest')
-  latest(@CurrentUser() current: { userId: string }) {
-    return this.measurementsService.latest(current.userId);
+  latest(
+    @CurrentUser() current: { userId: string; role: UserRole },
+    @Query('clientId') clientId?: string,
+  ) {
+    const acting = clientId ?? current.userId;
+    return this.measurementsService.latest(current.userId, current.role, acting);
   }
 
   @Post()
   create(
-    @CurrentUser() current: { userId: string },
+    @CurrentUser() current: { userId: string; role: UserRole },
+    @Query('clientId') clientId: string | undefined,
     @Body() dto: CreateMeasurementDto,
   ) {
-    return this.measurementsService.create(current.userId, dto);
+    const target = clientId ?? current.userId;
+    return this.measurementsService.create(
+      current.userId,
+      current.role,
+      target,
+      dto,
+    );
   }
 
   @Delete(':id')
   remove(
-    @CurrentUser() current: { userId: string },
+    @CurrentUser() current: { userId: string; role: UserRole },
     @Param('id') id: string,
   ) {
-    return this.measurementsService.remove(current.userId, id);
+    return this.measurementsService.remove(current.userId, current.role, id);
   }
 }

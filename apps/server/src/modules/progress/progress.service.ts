@@ -2,10 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Client } from '@libsql/client';
 
 import { DATABASE } from '../../database/database.tokens';
-import { BmiInfo, BodyMeasurement, WeightEntry } from '../../database/types';
+import { BmiInfo, BodyMeasurement, UserRole, WeightEntry } from '../../database/types';
 import { UsersService } from '../users/users.service';
 import { WeightService } from '../weight/weight.service';
 import { MeasurementsService } from '../measurements/measurements.service';
+import { InstructorsService } from '../instructors/instructors.service';
 
 export interface ProgressSummary {
   bmi: BmiInfo;
@@ -23,13 +24,23 @@ export class ProgressService {
     private readonly usersService: UsersService,
     private readonly weightService: WeightService,
     private readonly measurementsService: MeasurementsService,
+    private readonly instructorsService: InstructorsService,
   ) {}
 
-  async summary(userId: string): Promise<ProgressSummary> {
+  async summary(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+  ): Promise<ProgressSummary> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const [user, weights, measurements] = await Promise.all([
-      this.usersService.findById(userId),
-      this.weightService.list(userId),
-      this.measurementsService.list(userId),
+      this.usersService.findById(actingUserId),
+      this.weightService.list(actorUserId, actorRole, actingUserId),
+      this.measurementsService.list(actorUserId, actorRole, actingUserId),
     ]);
 
     const latestWeight = weights[0] ?? null;
@@ -58,14 +69,21 @@ export class ProgressService {
   }
 
   async bmiHistory(
-    userId: string,
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
   ): Promise<Array<{ recordedAt: string; bmi: number; weightKg: number }>> {
-    const user = await this.usersService.findById(userId);
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
+    const user = await this.usersService.findById(actingUserId);
     if (!user?.heightCm) return [];
     const heightM = user.heightCm / 100;
     const res = await this.db.execute({
       sql: 'SELECT weight_kg, recorded_at FROM weight_entries WHERE user_id = ? ORDER BY recorded_at ASC LIMIT 500',
-      args: [userId],
+      args: [actingUserId],
     });
     return res.rows.map((r: any) => {
       const weight = Number(r.weight_kg);

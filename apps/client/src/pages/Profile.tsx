@@ -49,7 +49,7 @@ export function Profile() {
       };
       const updated = await usersApi.update(payload);
       setProfile(updated);
-      if (setAuthUser) setAuthUser({ id: updated.id, email: updated.email, displayName: updated.displayName });
+      if (setAuthUser) setAuthUser({ id: updated.id, email: updated.email, displayName: updated.displayName, role: updated.role });
       setSuccess('Perfil actualizado');
     } catch (err: any) {
       const msg = err?.response?.data?.message;

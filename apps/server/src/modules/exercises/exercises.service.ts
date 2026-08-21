@@ -13,19 +13,29 @@ import {
   ExerciseSource,
   ExerciseType,
   ExerciseWithRoutineCount,
+  UserRole,
 } from '../../database/types';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
+import { InstructorsService } from '../instructors/instructors.service';
 
 @Injectable()
 export class ExercisesService {
-  constructor(@Inject(DATABASE) private readonly db: Client) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Client,
+    private readonly instructorsService: InstructorsService,
+  ) {}
 
-  /**
-   * Lista todos los ejercicios del usuario con el conteo de rutinas en las
-   * que aparecen. `routineCount === 0` indica "ejercicio libre".
-   */
-  async list(userId: string): Promise<ExerciseWithRoutineCount[]> {
+  async list(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+  ): Promise<ExerciseWithRoutineCount[]> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const res = await this.db.execute({
       sql: `
         SELECT e.*, COUNT(ri.id) AS routine_count
@@ -39,16 +49,21 @@ export class ExercisesService {
         GROUP BY e.id
         ORDER BY e.created_at DESC
       `,
-      args: [userId, userId],
+      args: [actingUserId, actingUserId],
     });
     return res.rows.map(mapExerciseWithCount);
   }
 
-  /**
-   * Lista solo los ejercicios que NO están asociados a ninguna rutina
-   * (ejercicios "libres").
-   */
-  async listFree(userId: string): Promise<ExerciseWithRoutineCount[]> {
+  async listFree(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+  ): Promise<ExerciseWithRoutineCount[]> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const res = await this.db.execute({
       sql: `
         SELECT e.*, 0 AS routine_count
@@ -61,39 +76,54 @@ export class ExercisesService {
           )
         ORDER BY e.created_at DESC
       `,
-      args: [userId, userId],
+      args: [actingUserId, actingUserId],
     });
     return res.rows.map(mapExerciseWithCount);
   }
 
-  /**
-   * Lista solo los ejercicios creados manualmente por el usuario
-   * (excluye los importados por AI Couch / catalogo).
-   */
-  async listManual(userId: string): Promise<Exercise[]> {
+  async listManual(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+  ): Promise<Exercise[]> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const res = await this.db.execute({
       sql: `SELECT * FROM exercises
             WHERE user_id = ? AND source = 'manual'
             ORDER BY created_at DESC`,
-      args: [userId],
+      args: [actingUserId],
     });
     return res.rows.map(mapExercise);
   }
 
-  /**
-   * Lista solo los ejercicios importados del catalogo (AI Couch / manual import).
-   */
-  async listImported(userId: string): Promise<Exercise[]> {
+  async listImported(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+  ): Promise<Exercise[]> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const res = await this.db.execute({
       sql: `SELECT * FROM exercises
             WHERE user_id = ? AND source = 'ai_import'
             ORDER BY created_at DESC`,
-      args: [userId],
+      args: [actingUserId],
     });
     return res.rows.map(mapExercise);
   }
 
-  async findOne(userId: string, id: string): Promise<Exercise> {
+  async findOne(
+    actorUserId: string,
+    actorRole: UserRole,
+    id: string,
+  ): Promise<Exercise> {
     const res = await this.db.execute({
       sql: 'SELECT * FROM exercises WHERE id = ?',
       args: [id],
@@ -101,16 +131,26 @@ export class ExercisesService {
     const row = res.rows[0];
     if (!row) throw new NotFoundException('Ejercicio no encontrado');
     const ex = mapExercise(row);
-    if (ex.userId !== userId)
-      throw new ForbiddenException('No autorizado');
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      ex.userId,
+    );
     return ex;
   }
 
   async create(
-    userId: string,
+    actorUserId: string,
+    actorRole: UserRole,
+    targetUserId: string,
     dto: CreateExerciseDto,
     source: ExerciseSource = 'manual',
   ): Promise<Exercise> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      targetUserId,
+    );
     const id = uuid();
     await this.db.execute({
       sql: `INSERT INTO exercises
@@ -118,7 +158,7 @@ export class ExercisesService {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         id,
-        userId,
+        targetUserId,
         dto.name,
         dto.type,
         dto.sets,
@@ -137,11 +177,12 @@ export class ExercisesService {
   }
 
   async update(
-    userId: string,
+    actorUserId: string,
+    actorRole: UserRole,
     id: string,
     dto: UpdateExerciseDto,
   ): Promise<Exercise> {
-    const existing = await this.findOne(userId, id);
+    const existing = await this.findOne(actorUserId, actorRole, id);
     const merged: Exercise = {
       ...existing,
       ...dto,
@@ -163,11 +204,15 @@ export class ExercisesService {
         id,
       ],
     });
-    return this.findOne(userId, id);
+    return this.findOne(actorUserId, actorRole, id);
   }
 
-  async remove(userId: string, id: string): Promise<void> {
-    await this.findOne(userId, id);
+  async remove(
+    actorUserId: string,
+    actorRole: UserRole,
+    id: string,
+  ): Promise<void> {
+    await this.findOne(actorUserId, actorRole, id);
     await this.db.execute({
       sql: 'DELETE FROM exercises WHERE id = ?',
       args: [id],

@@ -33,12 +33,24 @@ export interface Routine {
   daysPerWeek: number;
   isActive: boolean;
   summary: string | null;
+  /** ID del instructor que creó la rutina en nombre del cliente (null si fue el propio cliente). */
+  writtenByInstructorId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface RoutineWindow {
+  startDate: string;
+  endDate: string | null;
+}
+
 export interface RoutineWithItems extends Routine {
   items: RoutineItem[];
+  /** True si la rutina tiene una asignación ACTIVE vigente al día de hoy. */
+  assignedByInstructor?: boolean;
+  assignedInstructorId?: string | null;
+  assignedInstructorName?: string | null;
+  assignmentWindow?: RoutineWindow | null;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -79,19 +91,29 @@ export interface UpdateRoutineInput {
 // ──────────────────────────────────────────────────────────────────────────────
 
 export const routinesApi = {
-  list: () => api.get<RoutineWithItems[]>('/routines').then((r) => r.data),
+  list: (clientId?: string) =>
+    api
+      .get<RoutineWithItems[]>('/routines', clientId ? { params: { clientId } } : undefined)
+      .then((r) => r.data),
 
-  active: () =>
-    api.get<RoutineWithItems | null>('/routines/active').then((r) => r.data),
+  active: (clientId?: string) =>
+    api
+      .get<RoutineWithItems | null>('/routines/active', clientId ? { params: { clientId } } : undefined)
+      .then((r) => r.data),
 
   get: (id: string) =>
     api.get<RoutineWithItems>(`/routines/${id}`).then((r) => r.data),
 
-  create: (data: CreateRoutineInput) =>
-    api.post<RoutineWithItems>('/routines', data).then((r) => r.data),
+  create: (data: CreateRoutineInput, clientId?: string) =>
+    api
+      .post<RoutineWithItems>('/routines', data, clientId ? { params: { clientId } } : undefined)
+      .then((r) => r.data),
 
   update: (id: string, data: UpdateRoutineInput) =>
     api.patch<RoutineWithItems>(`/routines/${id}`, data).then((r) => r.data),
+
+  replaceItems: (id: string, items: RoutineItemInput[]) =>
+    api.put<RoutineWithItems>(`/routines/${id}/items`, { items }).then((r) => r.data),
 
   activate: (id: string) =>
     api.patch<RoutineWithItems>(`/routines/${id}/activate`).then((r) => r.data),

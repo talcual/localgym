@@ -61,6 +61,126 @@ export class SeedService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     await this.seedUser();
     await this.seedCatalog();
+    await this.seedInstructorAndClient();
+  }
+
+  /**
+   * Crea un instructor y un cliente demo con una invitación ya aceptada y
+   * una rutina escrita por el instructor asignada al cliente. Solo se ejecuta
+   * si los emails no existen todavía (idempotente).
+   */
+  private async seedInstructorAndClient() {
+    const instructorEmail = 'instructor@modofit.dev';
+    const clientEmail = 'cliente@modofit.dev';
+
+    const existingInstructor = await this.usersService.findByEmail(instructorEmail);
+    const existingClient = await this.usersService.findByEmail(clientEmail);
+
+    if (existingInstructor && existingClient) {
+      this.logger.log('Seed: instructor y cliente demo ya existen, omitiendo.');
+      return;
+    }
+
+    const instructor =
+      existingInstructor ??
+      (await this.usersService.create(
+        instructorEmail,
+        'instructor123',
+        'Coach Demo',
+        'INSTRUCTOR',
+      ));
+
+    const client =
+      existingClient ??
+      (await this.usersService.create(
+        clientEmail,
+        'cliente123',
+        'Cliente Demo',
+        'CLIENT',
+      ));
+
+    // Relación activa instructor ↔ cliente.
+    const relCheck = await this.db.execute({
+      sql: `SELECT 1 FROM instructor_clients
+            WHERE instructor_id = ? AND client_id = ? AND status = 'ACTIVE'`,
+      args: [instructor.id, client.id],
+    });
+    if (relCheck.rows.length === 0) {
+      await this.db.execute({
+        sql: `INSERT INTO instructor_clients
+              (id, instructor_id, client_id, status, accepted_at)
+              VALUES (?, ?, ?, 'ACTIVE', datetime('now'))`,
+        args: [uuid(), instructor.id, client.id],
+      });
+      this.logger.log(
+        `Seed: relación instructor ${instructorEmail} <-> ${clientEmail} creada.`,
+      );
+    }
+
+    // Rutina escrita por el instructor y asignada al cliente.
+    const routineCheck = await this.db.execute({
+      sql: `SELECT 1 FROM routines
+            WHERE user_id = ? AND written_by_instructor_id = ?
+            LIMIT 1`,
+      args: [client.id, instructor.id],
+    });
+    if (routineCheck.rows.length === 0) {
+      const routineId = uuid();
+      await this.db.execute({
+        sql: `INSERT INTO routines
+              (id, user_id, title, goal, level, days_per_week, is_active,
+               summary, written_by_instructor_id)
+              VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        args: [
+          routineId,
+          client.id,
+          'Hipertrofia 4 días (demo)',
+          'hypertrophy',
+          'beginner',
+          4,
+          'Rutina de ejemplo escrita por el instructor demo.',
+          instructor.id,
+        ],
+      });
+
+      const dayPlan = [
+        { dayIndex: 0, label: 'Pecho y tríceps' },
+        { dayIndex: 1, label: 'Espalda y bíceps' },
+        { dayIndex: 2, label: 'Pierna' },
+        { dayIndex: 3, label: 'Hombro y core' },
+      ];
+      const catalogRes = await this.db.execute({
+        sql: 'SELECT id FROM exercise_catalog LIMIT 12',
+        args: [],
+      });
+      const catalogIds = catalogRes.rows.map((r) => String(r.id));
+      let pos = 0;
+      for (const d of dayPlan) {
+        for (let i = 0; i < 3; i++) {
+          const catalogId = catalogIds[(pos + i) % catalogIds.length];
+          await this.db.execute({
+            sql: `INSERT INTO routine_items
+                  (id, routine_id, day_index, day_label, position,
+                   exercise_id, catalog_id, sets, reps, duration_per_set_sec, rest_sec, notes)
+                  VALUES (?, ?, ?, ?, ?, NULL, ?, 3, 12, NULL, 60, NULL)`,
+            args: [uuid(), routineId, d.dayIndex, d.label, pos, catalogId],
+          });
+          pos++;
+        }
+      }
+
+      // Asignación con ventana que ya está vigente.
+      await this.db.execute({
+        sql: `INSERT INTO routine_assignments
+              (id, routine_id, client_id, instructor_id, start_date, end_date, status)
+              VALUES (?, ?, ?, ?, date('now'), date('now', '+30 days'), 'ACTIVE')`,
+        args: [uuid(), routineId, client.id, instructor.id],
+      });
+
+      this.logger.log(
+        `Seed: rutina demo escrita por instructor y asignada al cliente.`,
+      );
+    }
   }
 
   private async seedUser() {

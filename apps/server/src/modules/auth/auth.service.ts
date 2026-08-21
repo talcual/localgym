@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UserRole } from '../../database/types';
 
 @Injectable()
 export class AuthService {
@@ -21,12 +22,19 @@ export class AuthService {
     if (existing) {
       throw new ConflictException('El email ya está registrado');
     }
+    const role: UserRole = dto.role ?? 'CLIENT';
     const user = await this.usersService.create(
       dto.email,
       dto.password,
       dto.displayName,
+      role,
     );
-    return this.buildAuthResponse(user.id, user.email, user.displayName);
+    return this.buildAuthResponse(
+      user.id,
+      user.email,
+      user.displayName,
+      user.role,
+    );
   }
 
   async login(dto: LoginDto) {
@@ -38,15 +46,25 @@ export class AuthService {
     if (!valid) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
-    return this.buildAuthResponse(user.id, user.email, user.displayName);
+    return this.buildAuthResponse(
+      user.id,
+      user.email,
+      user.displayName,
+      user.role,
+    );
   }
 
-  private buildAuthResponse(id: string, email: string, displayName: string) {
-    const payload = { sub: id, email };
+  private buildAuthResponse(
+    id: string,
+    email: string,
+    displayName: string,
+    role: UserRole,
+  ) {
+    const payload = { sub: id, email, role };
     const access_token = this.jwtService.sign(payload);
     return {
       access_token,
-      user: { id, email, displayName },
+      user: { id, email, displayName, role },
     };
   }
 }

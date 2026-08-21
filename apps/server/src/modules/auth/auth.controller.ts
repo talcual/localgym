@@ -32,13 +32,14 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@CurrentUser() current: { userId: string }) {
+  async me(@CurrentUser() current: { userId: string; role: string }) {
     const user = await this.usersService.findById(current.userId);
     if (!user) return null;
     return {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      role: user.role,
       createdAt: user.createdAt,
     };
   }

@@ -115,6 +115,15 @@ export function Routines() {
     [routines, activeRoutineId],
   );
 
+  const instructorRoutines = useMemo(
+    () => routines.filter((r) => r.assignedByInstructor),
+    [routines],
+  );
+  const ownRoutines = useMemo(
+    () => routines.filter((r) => !r.assignedByInstructor),
+    [routines],
+  );
+
   if (loading) {
     return <div className="text-slate-400">Cargando...</div>;
   }
@@ -127,7 +136,6 @@ export function Routines() {
         </h1>
         <p className="mt-1 text-sm text-slate-400">
           Activa una sola por vez. Empieza cada sesión por el día que te toque.
-          (Cargando...)
         </p>
       </div>
 
@@ -161,23 +169,67 @@ export function Routines() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {routines
-            .filter((r) => r.id !== activeRoutineId)
-            .map((r) => (
-              <RoutineCard
-                key={r.id}
-                routine={r}
-                exerciseMap={exerciseMap}
-                isActive={false}
-                busyId={busyId}
-                onActivate={activate}
-                onDeactivate={deactivate}
-                onRemove={remove}
-                onStartDay={startDay}
-              />
-            ))}
-        </div>
+        <>
+          {instructorRoutines.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-center gap-2">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-violet-300">
+                  De mi instructor
+                </h2>
+                <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+                  {instructorRoutines.length}
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {instructorRoutines
+                  .filter((r) => r.id !== activeRoutineId)
+                  .map((r) => (
+                    <RoutineCard
+                      key={r.id}
+                      routine={r}
+                      exerciseMap={exerciseMap}
+                      isActive={false}
+                      busyId={busyId}
+                      onActivate={activate}
+                      onDeactivate={deactivate}
+                      onRemove={remove}
+                      onStartDay={startDay}
+                    />
+                  ))}
+              </div>
+            </section>
+          )}
+
+          {ownRoutines.length > 0 && (
+            <section>
+              <div className="mb-2 flex items-center gap-2">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
+                  Mis rutinas
+                </h2>
+                <span className="rounded-full bg-slate-700/60 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+                  {ownRoutines.length}
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {ownRoutines
+                  .filter((r) => r.id !== activeRoutineId)
+                  .map((r) => (
+                    <RoutineCard
+                      key={r.id}
+                      routine={r}
+                      exerciseMap={exerciseMap}
+                      isActive={false}
+                      busyId={busyId}
+                      onActivate={activate}
+                      onDeactivate={deactivate}
+                      onRemove={remove}
+                      onStartDay={startDay}
+                    />
+                  ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   );
@@ -232,6 +284,22 @@ function RoutineCard({
             {highlight && (
               <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
                 Activa esta semana
+              </span>
+            )}
+            {routine.assignedByInstructor && (
+              <span
+                className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-300"
+                title={
+                  routine.assignmentWindow
+                    ? `Asignada por ${routine.assignedInstructorName ?? 'tu instructor'} del ${routine.assignmentWindow.startDate}${
+                        routine.assignmentWindow.endDate
+                          ? ' al ' + routine.assignmentWindow.endDate
+                          : ' (sin fecha de fin)'
+                      }`
+                    : 'Asignada por tu instructor'
+                }
+              >
+                De {routine.assignedInstructorName ?? 'tu instructor'}
               </span>
             )}
             <h2 className="truncate text-base font-semibold">{routine.title}</h2>

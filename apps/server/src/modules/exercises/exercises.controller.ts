@@ -6,11 +6,13 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { UserRole } from '../../database/types';
 import { ExercisesService } from './exercises.service';
 import { CreateExerciseDto } from './dto/create-exercise.dto';
 import { UpdateExerciseDto } from './dto/update-exercise.dto';
@@ -21,67 +23,78 @@ export class ExercisesController {
   constructor(private readonly exercisesService: ExercisesService) {}
 
   @Get()
-  list(@CurrentUser() current: { userId: string }) {
-    return this.exercisesService.list(current.userId);
+  list(
+    @CurrentUser() current: { userId: string; role: UserRole },
+    @Query('clientId') clientId?: string,
+  ) {
+    const acting = clientId ?? current.userId;
+    return this.exercisesService.list(current.userId, current.role, acting);
   }
 
-  /**
-   * Lista los ejercicios que NO están asociados a ninguna rutina
-   * (ejercicios "libres", creados manualmente y todavía no usados).
-   */
   @Get('free')
-  listFree(@CurrentUser() current: { userId: string }) {
-    return this.exercisesService.listFree(current.userId);
+  listFree(
+    @CurrentUser() current: { userId: string; role: UserRole },
+    @Query('clientId') clientId?: string,
+  ) {
+    const acting = clientId ?? current.userId;
+    return this.exercisesService.listFree(current.userId, current.role, acting);
   }
 
-  /**
-   * Lista solo los ejercicios creados manualmente por el usuario
-   * (excluye los importados por AI Couch / catálogo).
-   */
   @Get('manual')
-  listManual(@CurrentUser() current: { userId: string }) {
-    return this.exercisesService.listManual(current.userId);
+  listManual(
+    @CurrentUser() current: { userId: string; role: UserRole },
+    @Query('clientId') clientId?: string,
+  ) {
+    const acting = clientId ?? current.userId;
+    return this.exercisesService.listManual(current.userId, current.role, acting);
   }
 
-  /**
-   * Lista solo los ejercicios importados desde el catálogo
-   * (los que llegaron vía AI Couch o import manual del catálogo).
-   */
   @Get('imported')
-  listImported(@CurrentUser() current: { userId: string }) {
-    return this.exercisesService.listImported(current.userId);
+  listImported(
+    @CurrentUser() current: { userId: string; role: UserRole },
+    @Query('clientId') clientId?: string,
+  ) {
+    const acting = clientId ?? current.userId;
+    return this.exercisesService.listImported(current.userId, current.role, acting);
   }
 
   @Get(':id')
   findOne(
-    @CurrentUser() current: { userId: string },
+    @CurrentUser() current: { userId: string; role: UserRole },
     @Param('id') id: string,
   ) {
-    return this.exercisesService.findOne(current.userId, id);
+    return this.exercisesService.findOne(current.userId, current.role, id);
   }
 
   @Post()
   create(
-    @CurrentUser() current: { userId: string },
+    @CurrentUser() current: { userId: string; role: UserRole },
+    @Query('clientId') clientId: string | undefined,
     @Body() dto: CreateExerciseDto,
   ) {
-    return this.exercisesService.create(current.userId, dto);
+    const target = clientId ?? current.userId;
+    return this.exercisesService.create(
+      current.userId,
+      current.role,
+      target,
+      dto,
+    );
   }
 
   @Patch(':id')
   update(
-    @CurrentUser() current: { userId: string },
+    @CurrentUser() current: { userId: string; role: UserRole },
     @Param('id') id: string,
     @Body() dto: UpdateExerciseDto,
   ) {
-    return this.exercisesService.update(current.userId, id, dto);
+    return this.exercisesService.update(current.userId, current.role, id, dto);
   }
 
   @Delete(':id')
   remove(
-    @CurrentUser() current: { userId: string },
+    @CurrentUser() current: { userId: string; role: UserRole },
     @Param('id') id: string,
   ) {
-    return this.exercisesService.remove(current.userId, id);
+    return this.exercisesService.remove(current.userId, current.role, id);
   }
 }

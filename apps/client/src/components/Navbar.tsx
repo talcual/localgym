@@ -8,6 +8,7 @@ import {
   Library,
   LineChart,
   ListChecks,
+  Send,
   Settings as SettingsIcon,
   Target,
   User,
@@ -22,7 +23,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
       : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
   }`;
 
-const navigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
+const studentNavigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
   ['Inicio', '/app', Home],
   ['Mis rutinas', '/routines', ListChecks],
   ['Ejercicios', '/exercises', Dumbbell],
@@ -35,11 +36,27 @@ const navigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
   ['Ajustes', '/profile', SettingsIcon],
 ];
 
-function Navigation() {
+const instructorNavigation: ReadonlyArray<readonly [string, string, LucideIcon]> = [
+  ['Panel instructor', '/instructor', Send],
+  ['Mis rutinas', '/routines', ListChecks],
+  ['Mensajes', '/instructor/messages', Send],
+  ['Ajustes', '/profile', SettingsIcon],
+];
+
+function Navigation({
+  items,
+}: {
+  items: ReadonlyArray<readonly [string, string, LucideIcon]>;
+}) {
   return (
     <nav className="flex gap-1 lg:block lg:space-y-1">
-      {navigation.map(([label, to, Icon]) => (
-        <NavLink key={`${label}-${to}`} to={to} end={to === '/app'} className={linkClass}>
+      {items.map(([label, to, Icon]) => (
+        <NavLink
+          key={`${label}-${to}`}
+          to={to}
+          end={to === '/app' || to === '/instructor'}
+          className={linkClass}
+        >
           <Icon className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
           {label}
         </NavLink>
@@ -49,17 +66,29 @@ function Navigation() {
 }
 
 export function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, isInstructor } = useAuth();
   const navigate = useNavigate();
+
+  const items = isInstructor ? instructorNavigation : studentNavigation;
+  const BrandIcon = isInstructor ? Send : Dumbbell;
 
   return (
     <aside className="border-b border-slate-800/80 bg-[#091121] lg:flex lg:min-h-screen lg:w-64 lg:flex-col lg:border-b-0 lg:border-r">
       <div className="flex items-center justify-between px-4 py-4 lg:px-5 lg:pt-5">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 font-bold shadow-lg shadow-violet-900/40">
-            <Dumbbell className="h-4 w-4 text-white" aria-hidden />
+          <div
+            className={
+              'flex h-8 w-8 items-center justify-center rounded-lg font-bold shadow-lg ' +
+              (isInstructor
+                ? 'bg-violet-600 shadow-violet-900/40'
+                : 'bg-indigo-600 shadow-indigo-900/40')
+            }
+          >
+            <BrandIcon className="h-4 w-4 text-white" aria-hidden />
           </div>
-          <span className="text-lg font-semibold">ModoFit</span>
+          <span className="text-lg font-semibold">
+            {isInstructor ? 'ModoFit · Pro' : 'ModoFit'}
+          </span>
         </div>
         <div className="flex items-center gap-3 lg:hidden">
           <NavLink
@@ -83,24 +112,38 @@ export function Navbar() {
           </button>
         </div>
       </div>
-        <div className="hidden flex-1 px-3 lg:block">
-          <Navigation />
+      {isInstructor && (
+        <div className="px-4 pb-2 lg:px-5">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-600/15 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-violet-300">
+            Instructor
+          </span>
         </div>
-        <div className="hidden border-t border-slate-800/80 p-3 lg:block">
-          <NavLink to="/profile" className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 hover:border-slate-700">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-sm">{user?.displayName?.[0] ?? 'U'}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">{user?.displayName}</span>
-              <span className="block text-xs text-slate-500">Ver perfil</span>
+      )}
+      <div className="hidden flex-1 px-3 lg:block">
+        <Navigation items={items} />
+      </div>
+      <div className="hidden border-t border-slate-800/80 p-3 lg:block">
+        <NavLink
+          to="/profile"
+          className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 hover:border-slate-700"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-sm">
+            {user?.displayName?.[0] ?? 'U'}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">
+              {user?.displayName}
             </span>
-            <span className="text-slate-500" aria-hidden>
-              ›
-            </span>
-          </NavLink>
-        </div>
-        <div className="flex gap-1 overflow-x-auto px-2 pb-2 lg:hidden">
-          <Navigation />
-        </div>
+            <span className="block text-xs text-slate-500">Ver perfil</span>
+          </span>
+          <span className="text-slate-500" aria-hidden>
+            ›
+          </span>
+        </NavLink>
+      </div>
+      <div className="flex gap-1 overflow-x-auto px-2 pb-2 lg:hidden">
+        <Navigation items={items} />
+      </div>
     </aside>
   );
 }

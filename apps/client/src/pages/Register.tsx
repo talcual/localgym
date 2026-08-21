@@ -8,6 +8,7 @@ export function Register({ onSwitch }: { onSwitch?: () => void }) {
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<'CLIENT' | 'INSTRUCTOR'>('CLIENT');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,8 +17,8 @@ export function Register({ onSwitch }: { onSwitch?: () => void }) {
     setError(null);
     setLoading(true);
     try {
-      await register(email, password, displayName);
-      navigate('/app');
+      await register(email, password, displayName, role);
+      navigate(role === 'INSTRUCTOR' ? '/instructor' : '/app');
     } catch (err: any) {
       const msg = err?.response?.data?.message;
       setError(Array.isArray(msg) ? msg.join(', ') : msg || 'Error al registrarse');
@@ -65,6 +66,35 @@ export function Register({ onSwitch }: { onSwitch?: () => void }) {
             className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
           <p className="text-xs text-slate-500 mt-1">Mínimo 6 caracteres</p>
+        </div>
+        <div>
+          <span className="block text-sm text-slate-300 mb-1">Tipo de cuenta</span>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setRole('CLIENT')}
+              className={
+                'rounded-lg border px-3 py-2 text-sm transition ' +
+                (role === 'CLIENT'
+                  ? 'border-indigo-500 bg-indigo-600/20 text-white'
+                  : 'border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-700')
+              }
+            >
+              Soy cliente
+            </button>
+            <button
+              type="button"
+              onClick={() => setRole('INSTRUCTOR')}
+              className={
+                'rounded-lg border px-3 py-2 text-sm transition ' +
+                (role === 'INSTRUCTOR'
+                  ? 'border-violet-500 bg-violet-600/20 text-white'
+                  : 'border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-700')
+              }
+            >
+              Soy instructor
+            </button>
+          </div>
         </div>
         {error && (
           <div className="text-sm text-red-400 bg-red-950/40 border border-red-900 rounded-lg px-3 py-2">

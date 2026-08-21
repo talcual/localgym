@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Client } from '@libsql/client';
 
 import { DATABASE } from '../../database/database.tokens';
+import { UserRole } from '../../database/types';
+import { InstructorsService } from '../instructors/instructors.service';
 
 export interface SummaryStats {
   totalSessions: number;
@@ -28,15 +30,28 @@ export interface ExerciseAggregate {
 
 @Injectable()
 export class StatsService {
-  constructor(@Inject(DATABASE) private readonly db: Client) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Client,
+    private readonly instructorsService: InstructorsService,
+  ) {}
 
-  async summary(userId: string, tz?: string): Promise<SummaryStats> {
+  async summary(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+    tz?: string,
+  ): Promise<SummaryStats> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const zone = sanitizeTimeZone(tz);
 
     const res = await this.db.execute({
       sql: `SELECT sets_completed, total_duration_sec, total_reps, performed_at, exercise_id
             FROM session_logs WHERE user_id = ?`,
-      args: [userId],
+      args: [actingUserId],
     });
 
     if (res.rows.length === 0) {
@@ -76,7 +91,18 @@ export class StatsService {
     };
   }
 
-  async byDay(userId: string, days: number, tz?: string): Promise<DailyCount[]> {
+  async byDay(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+    days: number,
+    tz?: string,
+  ): Promise<DailyCount[]> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const zone = sanitizeTimeZone(tz);
 
     const since = new Date();
@@ -87,7 +113,7 @@ export class StatsService {
       sql: `SELECT performed_at, total_duration_sec
             FROM session_logs
             WHERE user_id = ? AND performed_at >= ?`,
-      args: [userId, since.toISOString()],
+      args: [actingUserId, since.toISOString()],
     });
 
     const buckets = new Map<string, { sessions: number; durationSec: number }>();
@@ -113,13 +139,22 @@ export class StatsService {
     }));
   }
 
-  async byExercise(userId: string): Promise<ExerciseAggregate[]> {
+  async byExercise(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+  ): Promise<ExerciseAggregate[]> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const res = await this.db.execute({
       sql: `SELECT s.exercise_id, s.total_duration_sec, s.total_reps, e.name as exercise_name
             FROM session_logs s
             LEFT JOIN exercises e ON e.id = s.exercise_id
             WHERE s.user_id = ?`,
-      args: [userId],
+      args: [actingUserId],
     });
 
     const map = new Map<string, ExerciseAggregate>();
@@ -144,16 +179,11 @@ export class StatsService {
   }
 }
 
-/**
- * Valida una zona horaria IANA. Si no se pasa o es inválida, devuelve undefined
- * (se usará la zona del servidor como antes).
- */
 function sanitizeTimeZone(tz?: string | null): string | undefined {
   if (!tz || typeof tz !== 'string') return undefined;
   const trimmed = tz.trim();
   if (!trimmed) return undefined;
   try {
-    // Lanzará si la zona no es IANA válida.
     new Intl.DateTimeFormat('en-US', { timeZone: trimmed }).format(new Date());
     return trimmed;
   } catch {
@@ -161,11 +191,6 @@ function sanitizeTimeZone(tz?: string | null): string | undefined {
   }
 }
 
-/**
- * Devuelve YYYY-MM-DD interpretado en la zona indicada (o la del servidor).
- * Usa `Intl.DateTimeFormat.formatToParts` para no depender de getHours(),
- * que reflejaría la zona del servidor.
- */
 function toDateKey(d: Date, zone?: string): string {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: zone || undefined,
@@ -218,7 +243,6 @@ function computeStreaks(
 }
 
 function daysBetween(a: string, b: string, zone?: string): number {
-  // Diferencia de días entre dos YYYY-MM-DD interpretadas en `zone`.
   const [ay, am, ad] = a.split('-').map(Number);
   const [by, bm, bd] = b.split('-').map(Number);
   const aDate = new Date(Date.UTC(ay, am - 1, ad, 12));
@@ -231,8 +255,6 @@ function daysBetween(a: string, b: string, zone?: string): number {
 }
 
 function tzOffsetMinutes(d: Date, zone?: string): number {
-  // Minutos de diferencia entre UTC y la zona del usuario al instante `d`.
-  // Para Etc/GMT+5 (UTC-5) la diferencia es -300.
   if (!zone) return -d.getTimezoneOffset();
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone: zone,
@@ -244,6 +266,5 @@ function tzOffsetMinutes(d: Date, zone?: string): number {
   if (!m) return 0;
   const hours = parseInt(m[1], 10);
   const minutes = m[2] ? parseInt(m[2], 10) : 0;
-  // Para Etc/GMT+5, "GMT+5" significa UTC-5, así que invertimos el signo.
   return -(hours * 60 + minutes);
 }

@@ -14,6 +14,9 @@ import { MeasurementsModule } from './modules/measurements/measurements.module';
 import { ProgressModule } from './modules/progress/progress.module';
 import { OllamaModule } from './modules/ollama/ollama.module';
 import { RoutinesModule } from './modules/routines/routines.module';
+import { InstructorsModule } from './modules/instructors/instructors.module';
+import { RoutineAssignmentsModule } from './modules/routine-assignments/routine-assignments.module';
+import { MessagesModule } from './modules/messages/messages.module';
 
 @Module({
   imports: [
@@ -31,6 +34,9 @@ import { RoutinesModule } from './modules/routines/routines.module';
     ProgressModule,
     OllamaModule,
     RoutinesModule,
+    InstructorsModule,
+    RoutineAssignmentsModule,
+    MessagesModule,
   ],
 })
 export class AppModule {}

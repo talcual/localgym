@@ -14,12 +14,20 @@ const SCHEMA: Array<{ table: string; columns: ColumnSpec[] }> = [
       { name: 'height_cm', type: 'REAL' },
       { name: 'sex', type: 'TEXT' },
       { name: 'birthdate', type: 'TEXT' },
+      { name: 'role', type: "TEXT NOT NULL DEFAULT 'CLIENT'" },
+      { name: 'is_instructor', type: 'INTEGER NOT NULL DEFAULT 0' },
     ],
   },
   {
     table: 'exercises',
     columns: [
       { name: 'source', type: "TEXT NOT NULL DEFAULT 'manual'" },
+    ],
+  },
+  {
+    table: 'routines',
+    columns: [
+      { name: 'written_by_instructor_id', type: 'TEXT' },
     ],
   },
 ];
@@ -121,6 +129,7 @@ export class DatabaseInitService implements OnModuleInit {
           days_per_week INTEGER NOT NULL,
           is_active INTEGER NOT NULL DEFAULT 0,
           summary TEXT,
+          written_by_instructor_id TEXT,
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
           updated_at TEXT NOT NULL DEFAULT (datetime('now')),
           FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -152,6 +161,61 @@ export class DatabaseInitService implements OnModuleInit {
         `CREATE INDEX IF NOT EXISTS idx_routines_user ON routines(user_id)`,
         `CREATE INDEX IF NOT EXISTS idx_routines_active ON routines(user_id, is_active)`,
         `CREATE INDEX IF NOT EXISTS idx_routine_items_routine ON routine_items(routine_id)`,
+        `CREATE TABLE IF NOT EXISTS instructor_clients (
+          id TEXT PRIMARY KEY,
+          instructor_id TEXT NOT NULL,
+          client_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          invited_at TEXT NOT NULL DEFAULT (datetime('now')),
+          accepted_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        `CREATE TABLE IF NOT EXISTS instructor_invitations (
+          id TEXT PRIMARY KEY,
+          instructor_id TEXT NOT NULL,
+          client_email TEXT NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          kind TEXT NOT NULL DEFAULT 'EMAIL',
+          expires_at TEXT NOT NULL,
+          accepted_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        `CREATE TABLE IF NOT EXISTS routine_assignments (
+          id TEXT PRIMARY KEY,
+          routine_id TEXT NOT NULL,
+          client_id TEXT NOT NULL,
+          instructor_id TEXT NOT NULL,
+          start_date TEXT NOT NULL,
+          end_date TEXT,
+          status TEXT NOT NULL DEFAULT 'ACTIVE',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE,
+          FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        `CREATE TABLE IF NOT EXISTS messages (
+          id TEXT PRIMARY KEY,
+          sender_id TEXT NOT NULL,
+          recipient_id TEXT NOT NULL,
+          body TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          read_at TEXT,
+          FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        `CREATE INDEX IF NOT EXISTS idx_instructor_clients_instructor ON instructor_clients(instructor_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_instructor_clients_client ON instructor_clients(client_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_instructor_clients_active ON instructor_clients(client_id, status)`,
+        `CREATE INDEX IF NOT EXISTS idx_invitations_instructor ON instructor_invitations(instructor_id)`,
+        `CREATE INDEX IF NOT EXISTS idx_invitations_email ON instructor_invitations(client_email)`,
+        `CREATE INDEX IF NOT EXISTS idx_assignments_client ON routine_assignments(client_id, status)`,
+        `CREATE INDEX IF NOT EXISTS idx_assignments_routine ON routine_assignments(routine_id, status)`,
+        `CREATE INDEX IF NOT EXISTS idx_assignments_instructor ON routine_assignments(instructor_id, status)`,
+        `CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id, created_at)`,
+        `CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, created_at)`,
       ],
       'write',
     );

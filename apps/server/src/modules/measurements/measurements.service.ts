@@ -3,34 +3,63 @@ import { Client } from '@libsql/client';
 import { v4 as uuid } from 'uuid';
 
 import { DATABASE } from '../../database/database.tokens';
-import { BodyMeasurement } from '../../database/types';
+import { BodyMeasurement, UserRole } from '../../database/types';
 import { CreateMeasurementDto } from './dto/create-measurement.dto';
+import { InstructorsService } from '../instructors/instructors.service';
 
 @Injectable()
 export class MeasurementsService {
-  constructor(@Inject(DATABASE) private readonly db: Client) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Client,
+    private readonly instructorsService: InstructorsService,
+  ) {}
 
-  async list(userId: string): Promise<BodyMeasurement[]> {
+  async list(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+  ): Promise<BodyMeasurement[]> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const res = await this.db.execute({
       sql: 'SELECT * FROM body_measurements WHERE user_id = ? ORDER BY recorded_at DESC LIMIT 500',
-      args: [userId],
+      args: [actingUserId],
     });
     return res.rows.map(mapMeasurement);
   }
 
-  async latest(userId: string): Promise<BodyMeasurement | null> {
+  async latest(
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
+  ): Promise<BodyMeasurement | null> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const res = await this.db.execute({
       sql: 'SELECT * FROM body_measurements WHERE user_id = ? ORDER BY recorded_at DESC LIMIT 1',
-      args: [userId],
+      args: [actingUserId],
     });
     const row = res.rows[0];
     return row ? mapMeasurement(row) : null;
   }
 
   async create(
-    userId: string,
+    actorUserId: string,
+    actorRole: UserRole,
+    targetUserId: string,
     dto: CreateMeasurementDto,
   ): Promise<BodyMeasurement> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      targetUserId,
+    );
     const id = uuid();
     const recordedAt = dto.recordedAt
       ? new Date(dto.recordedAt).toISOString()
@@ -45,7 +74,7 @@ export class MeasurementsService {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         id,
-        userId,
+        targetUserId,
         recordedAt,
         dto.chestCm ?? null,
         dto.waistCm ?? null,
@@ -70,15 +99,22 @@ export class MeasurementsService {
     return mapMeasurement(res.rows[0]);
   }
 
-  async remove(userId: string, id: string): Promise<void> {
+  async remove(
+    actorUserId: string,
+    actorRole: UserRole,
+    id: string,
+  ): Promise<void> {
     const res = await this.db.execute({
       sql: 'SELECT user_id FROM body_measurements WHERE id = ?',
       args: [id],
     });
     const row = res.rows[0];
-    if (!row || String(row.user_id) !== userId) {
-      throw new NotFoundException('Registro no encontrado');
-    }
+    if (!row) throw new NotFoundException('Registro no encontrado');
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      String(row.user_id),
+    );
     await this.db.execute({
       sql: 'DELETE FROM body_measurements WHERE id = ?',
       args: [id],

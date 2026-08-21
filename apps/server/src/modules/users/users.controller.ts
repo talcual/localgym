@@ -11,13 +11,15 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  async getMe(@CurrentUser() current: { userId: string }) {
+  async getMe(@CurrentUser() current: { userId: string; role: string }) {
     const user = await this.usersService.findById(current.userId);
     if (!user) return null;
     return {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      role: user.role,
+      isInstructor: user.isInstructor,
       heightCm: user.heightCm,
       sex: user.sex,
       birthdate: user.birthdate,

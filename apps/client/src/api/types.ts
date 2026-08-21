@@ -2,6 +2,8 @@ export type ExerciseType = 'TIME' | 'REPS' | 'MIXED';
 
 export type Sex = 'MALE' | 'FEMALE' | 'OTHER';
 
+export type UserRole = 'CLIENT' | 'INSTRUCTOR' | 'ADMIN';
+
 export type BmiCategory =
   | 'UNDERWEIGHT'
   | 'NORMAL'
@@ -14,6 +16,7 @@ export interface AuthUser {
   id: string;
   email: string;
   displayName: string;
+  role: UserRole;
 }
 
 export interface UserProfile extends AuthUser {
@@ -154,4 +157,65 @@ export interface BmiHistoryPoint {
   recordedAt: string;
   bmi: number;
   weightKg: number;
+}
+
+// ─── Instructores / Clientes ──────────────────────────────────────────────────
+
+export type InstructorRelationStatus = 'PENDING' | 'ACTIVE' | 'REVOKED';
+
+export interface InstructorClient {
+  id: string;
+  instructorId: string;
+  clientId: string;
+  status: InstructorRelationStatus;
+  invitedAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
+}
+
+export type InvitationKind = 'EMAIL' | 'CODE';
+
+export interface InstructorInvitation {
+  id: string;
+  instructorId: string;
+  clientEmail: string;
+  token: string;
+  kind: InvitationKind;
+  expiresAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
+}
+
+export interface InviteResult extends InstructorInvitation {
+  inviteUrl: string;
+}
+
+export type RoutineAssignmentStatus = 'ACTIVE' | 'ARCHIVED';
+
+export interface RoutineAssignment {
+  id: string;
+  routineId: string;
+  clientId: string;
+  instructorId: string;
+  startDate: string;
+  endDate: string | null;
+  status: RoutineAssignmentStatus;
+  createdAt: string;
+}
+
+export interface Message {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface MessageThread {
+  userId: string;
+  displayName: string;
+  email: string;
+  lastMessage: Message;
+  unreadCount: number;
 }

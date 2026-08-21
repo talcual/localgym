@@ -3,8 +3,9 @@ import { Client } from '@libsql/client';
 import { v4 as uuid } from 'uuid';
 
 import { DATABASE } from '../../database/database.tokens';
-import { Exercise, SessionLogWithExercise } from '../../database/types';
+import { Exercise, SessionLogWithExercise, UserRole } from '../../database/types';
 import { CreateSessionDto } from './dto/create-session.dto';
+import { InstructorsService } from '../instructors/instructors.service';
 
 export interface ListSessionsFilter {
   from?: string;
@@ -14,14 +15,24 @@ export interface ListSessionsFilter {
 
 @Injectable()
 export class SessionsService {
-  constructor(@Inject(DATABASE) private readonly db: Client) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Client,
+    private readonly instructorsService: InstructorsService,
+  ) {}
 
   async list(
-    userId: string,
+    actorUserId: string,
+    actorRole: UserRole,
+    actingUserId: string,
     filter: ListSessionsFilter,
   ): Promise<SessionLogWithExercise[]> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      actingUserId,
+    );
     const where: string[] = ['s.user_id = ?'];
-    const args: any[] = [userId];
+    const args: any[] = [actingUserId];
 
     if (filter.exerciseId) {
       where.push('s.exercise_id = ?');
@@ -54,7 +65,8 @@ export class SessionsService {
   }
 
   async findOne(
-    userId: string,
+    actorUserId: string,
+    actorRole: UserRole,
     id: string,
   ): Promise<SessionLogWithExercise> {
     const res = await this.db.execute({
@@ -72,23 +84,35 @@ export class SessionsService {
     const row = res.rows[0];
     if (!row) throw new NotFoundException('Sesión no encontrada');
     const mapped = mapSessionWithExercise(row);
-    if (mapped.userId !== userId)
-      throw new ForbiddenException('No autorizado');
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      mapped.userId,
+    );
     return mapped;
   }
 
   async create(
-    userId: string,
+    actorUserId: string,
+    actorRole: UserRole,
+    targetUserId: string,
     dto: CreateSessionDto,
   ): Promise<SessionLogWithExercise> {
+    await this.instructorsService.assertCanAccessClient(
+      actorUserId,
+      actorRole,
+      targetUserId,
+    );
     const exRes = await this.db.execute({
       sql: 'SELECT * FROM exercises WHERE id = ?',
       args: [dto.exerciseId],
     });
     const exRow = exRes.rows[0];
     if (!exRow) throw new NotFoundException('Ejercicio no encontrado');
-    if (String(exRow.user_id) !== userId)
-      throw new ForbiddenException('No autorizado');
+    if (String(exRow.user_id) !== targetUserId)
+      throw new ForbiddenException(
+        'El ejercicio no pertenece al cliente destino',
+      );
 
     const exercise: Exercise = {
       id: String(exRow.id),
@@ -130,7 +154,7 @@ export class SessionsService {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         id,
-        userId,
+        targetUserId,
         dto.exerciseId,
         performedAt,
         dto.setsCompleted,
@@ -140,7 +164,7 @@ export class SessionsService {
       ],
     });
 
-    return this.findOne(userId, id);
+    return this.findOne(actorUserId, actorRole, id);
   }
 }
 

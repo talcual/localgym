@@ -54,6 +54,8 @@ export class CatalogController {
 
     return this.exercisesService.create(
       current.userId,
+      'CLIENT',
+      current.userId,
       {
         name: item.name,
         type: item.type,

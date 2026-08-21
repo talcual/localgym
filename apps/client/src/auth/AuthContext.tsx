@@ -1,13 +1,30 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  ReactNode,
+} from 'react';
 import { authApi } from '../api';
-import { AuthUser } from '../api/types';
+import type { AuthUser, UserRole } from '../api/types';
 import { loadAuthToken, setAuthToken } from '../api/client';
 
-interface AuthContextValue {
+export interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
+  /** `true` si el usuario es instructor o admin. Derivado de `user.role`. */
+  isInstructor: boolean;
+  /** `true` si el usuario es admin. */
+  isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    displayName: string,
+    role?: UserRole,
+  ) => Promise<void>;
   logout: () => void;
   setUser: (user: AuthUser | null) => void;
 }
@@ -37,20 +54,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   }, []);
 
-  const register = useCallback(async (email: string, password: string, displayName: string) => {
-    const res = await authApi.register(email, password, displayName);
-    setAuthToken(res.access_token);
-    setUser(res.user);
-  }, []);
+  const register = useCallback(
+    async (
+      email: string,
+      password: string,
+      displayName: string,
+      role?: UserRole,
+    ) => {
+      const res = await authApi.register(email, password, displayName, role);
+      setAuthToken(res.access_token);
+      setUser(res.user);
+    },
+    [],
+  );
 
   const logout = useCallback(() => {
     setAuthToken(null);
     setUser(null);
   }, []);
 
+  const isInstructor = user?.role === 'INSTRUCTOR' || user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'ADMIN';
+
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, setUser }),
-    [user, loading, login, register, logout],
+    () => ({
+      user,
+      loading,
+      isInstructor,
+      isAdmin,
+      login,
+      register,
+      logout,
+      setUser,
+    }),
+    [user, loading, isInstructor, isAdmin, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

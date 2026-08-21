@@ -1,6 +1,8 @@
 import { Route, Routes, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { RoleRoute } from './components/RoleRoute';
 import { Navbar } from './components/Navbar';
+import { InstructorShell } from './components/InstructorShell';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -18,6 +20,14 @@ import { Progress } from './pages/Progress';
 import { Routines } from './pages/Routines';
 import { Calendar } from './pages/Calendar';
 import { Goals } from './pages/Goals';
+import { AcceptInvitation } from './pages/AcceptInvitation';
+import { InstructorHome } from './pages/instructor/InstructorHome';
+import { ClientsList } from './pages/instructor/ClientsList';
+import { ClientDetail } from './pages/instructor/ClientDetail';
+import { InstructorRoutines } from './pages/instructor/InstructorRoutines';
+import { InstructorRoutineForm } from './pages/instructor/InstructorRoutineForm';
+import { Invitations } from './pages/instructor/Invitations';
+import { Messages } from './pages/instructor/Messages';
 import { useAuth } from './auth/AuthContext';
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -45,6 +55,88 @@ export function App() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route
+        path="/accept-invitation"
+        element={
+          <ProtectedRoute>
+            <AcceptInvitation />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Rutas instructor */}
+      <Route
+        path="/instructor"
+        element={
+          <RoleRoute allow={['INSTRUCTOR', 'ADMIN']}>
+            <InstructorShell>
+              <InstructorHome />
+            </InstructorShell>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/instructor/clients"
+        element={
+          <RoleRoute allow={['INSTRUCTOR', 'ADMIN']}>
+            <InstructorShell>
+              <ClientsList />
+            </InstructorShell>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/instructor/clients/:clientId"
+        element={
+          <RoleRoute allow={['INSTRUCTOR', 'ADMIN']}>
+            <InstructorShell>
+              <ClientDetail />
+            </InstructorShell>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/instructor/routines"
+        element={
+          <RoleRoute allow={['INSTRUCTOR', 'ADMIN']}>
+            <InstructorShell>
+              <InstructorRoutines />
+            </InstructorShell>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/instructor/routines/:routineId/edit"
+        element={
+          <RoleRoute allow={['INSTRUCTOR', 'ADMIN']}>
+            <InstructorShell>
+              <InstructorRoutineForm />
+            </InstructorShell>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/instructor/invitations"
+        element={
+          <RoleRoute allow={['INSTRUCTOR', 'ADMIN']}>
+            <InstructorShell>
+              <Invitations />
+            </InstructorShell>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/instructor/messages"
+        element={
+          <RoleRoute allow={['INSTRUCTOR', 'ADMIN']}>
+            <InstructorShell>
+              <Messages />
+            </InstructorShell>
+          </RoleRoute>
+        }
+      />
+
+      {/* Rutas cliente (también accesibles a instructores por si quieren ver su cuenta personal) */}
       <Route
         path="/app"
         element={

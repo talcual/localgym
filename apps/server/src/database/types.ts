@@ -7,6 +7,9 @@ export type ExerciseSource = (typeof EXERCISE_SOURCES)[number];
 export const SEX_VALUES = ['MALE', 'FEMALE', 'OTHER'] as const;
 export type Sex = (typeof SEX_VALUES)[number];
 
+export const USER_ROLES = ['CLIENT', 'INSTRUCTOR', 'ADMIN'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
 export interface User {
   id: string;
   email: string;
@@ -15,7 +18,101 @@ export interface User {
   heightCm: number | null;
   sex: Sex | null;
   birthdate: string | null;
+  role: UserRole;
+  /** Duplicado denormalizado de `role === 'INSTRUCTOR'` para queries rápidas. */
+  isInstructor: boolean;
   createdAt: string;
+}
+
+// ─── Instructores ─────────────────────────────────────────────────────────────
+
+export const INSTRUCTOR_RELATION_STATUSES = [
+  'PENDING',
+  'ACTIVE',
+  'REVOKED',
+] as const;
+export type InstructorRelationStatus =
+  (typeof INSTRUCTOR_RELATION_STATUSES)[number];
+
+/** Relación 1 instructor ↔ 1 cliente (un cliente tiene a lo sumo un instructor activo). */
+export interface InstructorClient {
+  id: string;
+  instructorId: string;
+  clientId: string;
+  status: InstructorRelationStatus;
+  invitedAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
+}
+
+export const INVITATION_KINDS = ['EMAIL', 'CODE'] as const;
+export type InvitationKind = (typeof INVITATION_KINDS)[number];
+
+/** Invitación pendiente (email o código compartible). */
+export interface InstructorInvitation {
+  id: string;
+  instructorId: string;
+  clientEmail: string;
+  token: string;
+  kind: InvitationKind;
+  expiresAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
+}
+
+export const ROUTINE_ASSIGNMENT_STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
+export type RoutineAssignmentStatus =
+  (typeof ROUTINE_ASSIGNMENT_STATUSES)[number];
+
+/** Asignación de una rutina a un cliente con ventana de fechas. */
+export interface RoutineAssignment {
+  id: string;
+  routineId: string;
+  clientId: string;
+  instructorId: string;
+  startDate: string; // ISO date 'YYYY-MM-DD'
+  endDate: string | null;
+  status: RoutineAssignmentStatus;
+  createdAt: string;
+}
+
+export interface RoutineAssignmentWithRoutine extends RoutineAssignment {
+  routine: Routine | null;
+}
+
+// ─── Mensajería ───────────────────────────────────────────────────────────────
+
+export interface Message {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
+/** Conversación agregada para listar hilos. */
+export interface MessageThread {
+  userId: string;
+  displayName: string;
+  lastMessage: Message;
+  unreadCount: number;
+}
+
+// ─── Rutinas extendidas (para el área de instructores) ────────────────────────
+
+export interface RoutineWindow {
+  startDate: string;
+  endDate: string | null;
+}
+
+/** Rutina enriquecida con metadatos de asignación por instructor. */
+export interface RoutineWithAssignment extends RoutineWithItems {
+  writtenByInstructorId: string | null;
+  assignedByInstructor: boolean;
+  assignedInstructorId: string | null;
+  assignedInstructorName: string | null;
+  assignmentWindow: RoutineWindow | null;
 }
 
 export interface Exercise {
@@ -128,6 +225,8 @@ export interface Routine {
   daysPerWeek: number;
   isActive: boolean;
   summary: string | null;
+  /** ID del instructor que creó la rutina en nombre del cliente (null si fue el propio cliente). */
+  writtenByInstructorId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -151,4 +250,6 @@ export interface RoutineItem {
 
 export interface RoutineWithItems extends Routine {
   items: RoutineItem[];
+  /** ID del instructor que escribió la rutina en nombre del cliente (null si fue el propio cliente). */
+  writtenByInstructorId: string | null;
 }
