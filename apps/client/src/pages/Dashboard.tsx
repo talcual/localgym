@@ -474,7 +474,7 @@ function AiFitnessCard({
         {status === 'streaming' && (
           <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-300">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400" />
-            Ollama streameando
+             Generando un plan...
           </span>
         )}
         {status === 'ready' && (
