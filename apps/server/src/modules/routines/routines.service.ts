@@ -58,6 +58,12 @@ export class RoutinesService {
     });
     const routines = routinesRes.rows.map((r) => mapRoutine(r));
     if (routines.length === 0) return [];
+    // Hidratamos los items `catalog_id` que aún no tengan `exercise_id`
+    // cuando el actor es el dueño de las rutinas (o admin). Si es un
+    // instructor mirando las rutinas del cliente, no tocamos nada.
+    if (actorRole === 'ADMIN' || actorUserId === actingUserId) {
+      for (const r of routines) await this.hydrateCatalogItems(r);
+    }
     const withItems = await this.attachItems(routines);
     return this.attachAssignmentMetadata(withItems);
   }
@@ -79,6 +85,9 @@ export class RoutinesService {
       actorRole,
       routine.userId,
     );
+    if (actorRole === 'ADMIN' || actorUserId === routine.userId) {
+      await this.hydrateCatalogItems(routine);
+    }
     const [withItems] = await this.attachItems([routine]);
     const [withMeta] = await this.attachAssignmentMetadata([withItems]);
     return withMeta;
@@ -100,6 +109,9 @@ export class RoutinesService {
     if (assignment) {
       const routine = await this.findOneInner(assignment.routineId);
       if (routine) {
+        if (actorRole === 'ADMIN' || actorUserId === actingUserId) {
+          await this.hydrateCatalogItems(routine);
+        }
         const [withItems] = await this.attachItems([routine]);
         const [withMeta] = await this.attachAssignmentMetadata([withItems]);
         return withMeta;
@@ -112,6 +124,9 @@ export class RoutinesService {
     const row = res.rows[0];
     if (!row) return null;
     const routine = mapRoutine(row);
+    if (actorRole === 'ADMIN' || actorUserId === actingUserId) {
+      await this.hydrateCatalogItems(routine);
+    }
     const [withItems] = await this.attachItems([routine]);
     const [withMeta] = await this.attachAssignmentMetadata([withItems]);
     return withMeta;
@@ -278,11 +293,6 @@ export class RoutinesService {
     // (o desactivar) una rutina asignada por su instructor para empezar a
     // entrenar con ella. Por eso usamos una comprobación más laxa.
     await this.assertCanActivateRoutine(actorUserId, actorRole, existing);
-    // Hidratamos los items que aún solo referencian el catálogo: clonamos
-    // cada `catalog_id` como un ejercicio personal del cliente y lo
-    // vinculamos al item. Esto permite entrenar la rutina desde el primer
-    // momento, sin que el botón "Entrenar este día" quede deshabilitado.
-    await this.hydrateCatalogItems(existing);
     await this.db.batch(
       [
         {
@@ -303,18 +313,21 @@ export class RoutinesService {
    * Para cada `routine_items` con `catalog_id` pero sin `exercise_id`,
    * crea un `exercises` personal del cliente clonando el catálogo y
    * actualiza el item con el nuevo id. Idempotente: si ya hay
-   * `exercise_id` no toca nada.
+   * `exercise_id` no toca nada. Lee los items directamente de la BD para
+   * funcionar tanto si la rutina ya tiene `items` cargados como si no.
    */
-  private async hydrateCatalogItems(
-    routine: RoutineWithItems,
-  ): Promise<void> {
-    const pending = routine.items.filter(
-      (it) => !it.exerciseId && it.catalogId,
-    );
+  private async hydrateCatalogItems(routine: Routine): Promise<void> {
+    const itemsRes = await this.db.execute({
+      sql: `SELECT id, catalog_id FROM routine_items
+            WHERE routine_id = ? AND exercise_id IS NULL AND catalog_id IS NOT NULL`,
+      args: [routine.id],
+    });
+    const pending = itemsRes.rows;
     if (pending.length === 0) return;
     const stmts: any[] = [];
-    for (const it of pending) {
-      const catalogId = it.catalogId!;
+    for (const row of pending) {
+      const itemId = String(row.id);
+      const catalogId = String(row.catalog_id);
       const catalogRes = await this.db.execute({
         sql: 'SELECT * FROM exercise_catalog WHERE id = ?',
         args: [catalogId],
@@ -347,7 +360,7 @@ export class RoutinesService {
         sql: `UPDATE routine_items
               SET exercise_id = ?
               WHERE id = ? AND exercise_id IS NULL`,
-        args: [newExerciseId, it.id],
+        args: [newExerciseId, itemId],
       });
     }
     if (stmts.length > 0) {
