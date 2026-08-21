@@ -8,6 +8,7 @@ import {
   Library,
   LineChart,
   ListChecks,
+  LogOut,
   Send,
   Settings as SettingsIcon,
   Target,
@@ -168,6 +169,18 @@ export function Navbar() {
             ›
           </span>
         </NavLink>
+        <button
+          type="button"
+          onClick={() => {
+            logout();
+            navigate('/login');
+          }}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-rose-700 hover:bg-rose-950/30 hover:text-rose-200"
+          title="Cerrar sesión"
+        >
+          <LogOut className="h-3.5 w-3.5" aria-hidden />
+          Cerrar sesión
+        </button>
       </div>
       <div className="flex gap-1 overflow-x-auto px-2 pb-2 lg:hidden">
         <Navigation
