@@ -2,17 +2,16 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { routinesApi } from '../../api';
 import type {
+  RoutineItemInput,
   RoutineWithItems,
 } from '../../api/routines';
-import {
-  groupRoutineItemsByDay,
-} from '../../api/routines';
+import { RoutineItemsEditor } from '../../components/RoutineItemsEditor';
 
 export function InstructorRoutineForm() {
   const { routineId } = useParams<{ routineId: string }>();
   const navigate = useNavigate();
   const [routine, setRoutine] = useState<RoutineWithItems | null>(null);
-  const [itemsJson, setItemsJson] = useState('');
+  const [items, setItems] = useState<RoutineItemInput[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +21,20 @@ export function InstructorRoutineForm() {
       try {
         const r = await routinesApi.get(routineId);
         setRoutine(r);
-        setItemsJson(JSON.stringify(r.items, null, 2));
+        // Sólo enviamos al editor los campos editables del item.
+        setItems(
+          r.items.map((it) => ({
+            dayIndex: it.dayIndex,
+            dayLabel: it.dayLabel,
+            exerciseId: it.exerciseId ?? undefined,
+            catalogId: it.catalogId ?? undefined,
+            sets: it.sets ?? undefined,
+            reps: it.reps ?? undefined,
+            durationPerSetSec: it.durationPerSetSec ?? undefined,
+            restSec: it.restSec ?? undefined,
+            notes: it.notes ?? undefined,
+          })),
+        );
       } catch (err) {
         setError((err as Error).message || 'No se pudo cargar la rutina');
       }
@@ -32,16 +44,17 @@ export function InstructorRoutineForm() {
   async function save() {
     if (!routine) return;
     setError(null);
-    let parsed: any[];
-    try {
-      parsed = JSON.parse(itemsJson);
-    } catch (err) {
-      setError('JSON inválido: ' + (err as Error).message);
+    const withExercise = items.filter((it) => it.exerciseId || it.catalogId);
+    if (withExercise.length < 3) {
+      setError('La rutina debe tener al menos 3 ejercicios');
       return;
     }
+    // Si el usuario borró ejercicios pero dejó días vacíos, los limpiamos
+    // para evitar enviar días sin items.
+    const clean = items.filter((it) => it.exerciseId || it.catalogId);
     setBusy(true);
     try {
-      await routinesApi.replaceItems(routine.id, parsed);
+      await routinesApi.replaceItems(routine.id, clean);
       navigate('/instructor/routines');
     } catch (err) {
       setError((err as Error).message || 'No se pudo guardar');
@@ -68,46 +81,15 @@ export function InstructorRoutineForm() {
 
       <section className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-300">
-          Días
+          Ejercicios
         </h2>
-        <div className="space-y-2 text-sm">
-          {groupRoutineItemsByDay(routine.items).map((d) => (
-            <div key={d.dayIndex} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3">
-              <div className="font-medium">D{d.dayIndex + 1} · {d.dayLabel}</div>
-              <ul className="mt-1 list-disc pl-5 text-xs text-slate-400">
-                {d.items.map((it) => (
-                  <li key={it.id}>
-                    {it.exerciseId ?? it.catalogId ?? '—'}
-                    {it.sets ? ` · ${it.sets} sets` : ''}
-                    {it.reps ? ` × ${it.reps} reps` : ''}
-                    {it.durationPerSetSec ? ` × ${it.durationPerSetSec}s` : ''}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-slate-800/80 bg-[#0d1526] p-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-slate-300">
-          Reemplazar items (JSON)
-        </h2>
-        <p className="mb-2 text-xs text-slate-500">
-          Cuidado: reemplaza TODOS los items. Mantén al menos 3 ejercicios.
-        </p>
-        <textarea
-          value={itemsJson}
-          onChange={(e) => setItemsJson(e.target.value)}
-          rows={18}
-          className="w-full rounded-lg border border-slate-700 bg-slate-950/60 p-3 font-mono text-xs focus:border-violet-500 focus:outline-none"
-        />
+        <RoutineItemsEditor items={items} onChange={setItems} />
         {error && (
-          <div className="mt-2 rounded-lg border border-rose-900/50 bg-rose-950/30 p-3 text-xs text-rose-200">
+          <div className="mt-3 rounded-lg border border-rose-900/50 bg-rose-950/30 p-3 text-sm text-rose-200">
             {error}
           </div>
         )}
-        <div className="mt-3 flex justify-end gap-2">
+        <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
             onClick={() => navigate('/instructor/routines')}

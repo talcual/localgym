@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, X } from 'lucide-react';
 import { instructorsApi, routinesApi } from '../../api';
@@ -7,9 +7,7 @@ import type {
   RoutineItemInput,
   RoutineWithItems,
 } from '../../api/routines';
-import {
-  groupRoutineItemsByDay,
-} from '../../api/routines';
+import { RoutineItemsEditor } from '../../components/RoutineItemsEditor';
 
 export function InstructorRoutines() {
   const [clients, setClients] = useState<InstructorClient[]>([]);
@@ -140,12 +138,11 @@ export function InstructorRoutines() {
 }
 
 /**
- * Modal para crear una rutina nueva para un cliente. El instructor elige:
- *  - Cliente destino (selector).
- *  - Título, objetivo, nivel, días por semana.
- *  - Lista inicial de items (uno por día por defecto, 3 ejercicios del catálogo).
+ * Modal para crear una rutina nueva para un cliente.
  *
- * El backend graba la rutina con `user_id = clienteId` y `written_by_instructor_id = instructorId`.
+ * Usa el `RoutineItemsEditor` para que el instructor pueda añadir
+ * ejercicios por día con una UI amigable (buscador del catálogo +
+ * inputs numéricos + reordenamiento).
  */
 function NewRoutineModal({
   clients,
@@ -158,35 +155,55 @@ function NewRoutineModal({
 }) {
   const [clientId, setClientId] = useState<string>(clients[0]?.clientId ?? '');
   const [title, setTitle] = useState('Rutina personalizada');
-  const [goal, setGoal] = useState<'strength' | 'hypertrophy' | 'fat_loss' | 'endurance'>(
-    'hypertrophy',
-  );
-  const [level, setLevel] = useState<'beginner' | 'intermediate' | 'advanced'>(
-    'beginner',
-  );
+  const [goal, setGoal] = useState<
+    'strength' | 'hypertrophy' | 'fat_loss' | 'endurance'
+  >('hypertrophy');
+  const [level, setLevel] = useState<
+    'beginner' | 'intermediate' | 'advanced'
+  >('beginner');
   const [daysPerWeek, setDaysPerWeek] = useState(3);
-  const [items, setItems] = useState<RoutineItemInput[]>(() =>
-    defaultItemsFor(3),
-  );
+  const [items, setItems] = useState<RoutineItemInput[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Regenera items cuando cambia días por semana.
-  useEffect(() => {
-    setItems(defaultItemsFor(daysPerWeek));
-  }, [daysPerWeek]);
+  // Si todavía no hay items, inicializamos con N días vacíos cuando cambia daysPerWeek.
+  // En cambio, si el instructor ya empezó a editar, respetamos lo que hay.
+  function ensureDays(target: number) {
+    if (items.length > 0) return;
+    const dayLabels = ['Día A', 'Día B', 'Día C', 'Día D', 'Día E', 'Día F'];
+    const next: RoutineItemInput[] = [];
+    for (let d = 0; d < target; d++) {
+      next.push({
+        dayIndex: d,
+        dayLabel: dayLabels[d] ?? `Día ${d + 1}`,
+        sets: 3,
+        reps: 12,
+        restSec: 60,
+      });
+    }
+    setItems(next);
+  }
 
-  const days = useMemo(() => groupRoutineItemsByDay(items as any), [items]);
+  useEffect(() => {
+    ensureDays(daysPerWeek);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function save() {
     if (!clientId) {
       setError('Selecciona un cliente');
       return;
     }
-    if (items.length < 3) {
-      setError('La rutina debe tener al menos 3 ejercicios');
+    const withExercise = items.filter((it) => it.exerciseId || it.catalogId);
+    if (withExercise.length < 3) {
+      setError(
+        'La rutina debe tener al menos 3 ejercicios. Añádelos desde el buscador del catálogo.',
+      );
       return;
     }
+    const cleanItems = items.filter((it) => it.exerciseId || it.catalogId);
+    // Recalcular daysPerWeek a partir de los días presentes.
+    const realDays = Math.max(daysPerWeek, new Set(cleanItems.map((i) => i.dayIndex)).size + 1);
     setBusy(true);
     setError(null);
     try {
@@ -195,9 +212,9 @@ function NewRoutineModal({
           title,
           goal,
           level,
-          daysPerWeek,
+          daysPerWeek: realDays,
           summary: undefined,
-          items,
+          items: cleanItems,
         },
         clientId,
       );
@@ -219,7 +236,7 @@ function NewRoutineModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-2xl border border-slate-800 bg-[#0d1526] shadow-2xl"
+        className="w-full max-w-3xl rounded-2xl border border-slate-800 bg-[#0d1526] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-slate-800 p-4">
@@ -234,28 +251,20 @@ function NewRoutineModal({
         </header>
 
         <div className="space-y-4 p-4">
-          <div>
-            <label className="text-xs uppercase tracking-wide text-slate-400">
-              Cliente destino
-            </label>
-            <select
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
-            >
-              {clients.map((c) => (
-                <option key={c.clientId} value={c.clientId}>
-                  Cliente #{c.clientId.slice(0, 8)}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-[11px] text-slate-500">
-              La rutina queda como propiedad del cliente; tú solo la
-              "escribes en su nombre".
-            </p>
-          </div>
-
           <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Cliente destino">
+              <select
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
+              >
+                {clients.map((c) => (
+                  <option key={c.clientId} value={c.clientId}>
+                    Cliente #{c.clientId.slice(0, 8)}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Título">
               <input
                 value={title}
@@ -286,42 +295,34 @@ function NewRoutineModal({
                 <option value="advanced">Avanzado</option>
               </select>
             </Field>
-            <Field label="Días por semana">
+            <Field label="Días por semana (3–6)">
               <input
                 type="number"
                 min={3}
                 max={6}
                 value={daysPerWeek}
-                onChange={(e) =>
-                  setDaysPerWeek(Math.max(3, Math.min(6, Number(e.target.value) || 3)))
-                }
+                onChange={(e) => {
+                  const n = Math.max(
+                    3,
+                    Math.min(6, Number(e.target.value) || 3),
+                  );
+                  setDaysPerWeek(n);
+                  // Si todavía no editó, regeneramos los días.
+                  if (items.every((i) => !i.exerciseId && !i.catalogId)) {
+                    ensureDays(n);
+                  }
+                }}
                 className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none"
               />
             </Field>
           </div>
 
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-400">
-              Ejercicios generados
+            <p className="mb-2 text-xs text-slate-400">
+              Añade ejercicios por día usando el buscador del catálogo. Ajusta
+              series, repeticiones, duración y descanso directamente.
             </p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Se crean {daysPerWeek} días con 1 ejercicio por día apuntando al
-              catálogo. Luego podrás editar el detalle y los ejercicios
-              concretos desde "Editar".
-            </p>
-            <ul className="mt-2 space-y-1 text-xs text-slate-300">
-              {days.map((d) => (
-                <li
-                  key={d.dayIndex}
-                  className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2"
-                >
-                  <span>
-                    D{d.dayIndex + 1} · {d.dayLabel}
-                  </span>
-                  <span>{d.items.length} ejercicio(s)</span>
-                </li>
-              ))}
-            </ul>
+            <RoutineItemsEditor items={items} onChange={setItems} />
           </div>
 
           {error && (
@@ -368,20 +369,4 @@ function Field({
       <div className="mt-1">{children}</div>
     </label>
   );
-}
-
-function defaultItemsFor(daysPerWeek: number): RoutineItemInput[] {
-  const dayLabels = ['Día A', 'Día B', 'Día C', 'Día D', 'Día E', 'Día F'];
-  const items: RoutineItemInput[] = [];
-  for (let d = 0; d < daysPerWeek; d++) {
-    items.push({
-      dayIndex: d,
-      dayLabel: dayLabels[d] ?? `Día ${d + 1}`,
-      // Sin exerciseId ni catalogId: el instructor lo completará al editar.
-      sets: 3,
-      reps: 12,
-      restSec: 60,
-    });
-  }
-  return items;
 }
