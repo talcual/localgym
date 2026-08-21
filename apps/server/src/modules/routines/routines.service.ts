@@ -278,6 +278,11 @@ export class RoutinesService {
     // (o desactivar) una rutina asignada por su instructor para empezar a
     // entrenar con ella. Por eso usamos una comprobación más laxa.
     await this.assertCanActivateRoutine(actorUserId, actorRole, existing);
+    // Hidratamos los items que aún solo referencian el catálogo: clonamos
+    // cada `catalog_id` como un ejercicio personal del cliente y lo
+    // vinculamos al item. Esto permite entrenar la rutina desde el primer
+    // momento, sin que el botón "Entrenar este día" quede deshabilitado.
+    await this.hydrateCatalogItems(existing);
     await this.db.batch(
       [
         {
@@ -292,6 +297,62 @@ export class RoutinesService {
       'write',
     );
     return this.findOne(actorUserId, actorRole, id);
+  }
+
+  /**
+   * Para cada `routine_items` con `catalog_id` pero sin `exercise_id`,
+   * crea un `exercises` personal del cliente clonando el catálogo y
+   * actualiza el item con el nuevo id. Idempotente: si ya hay
+   * `exercise_id` no toca nada.
+   */
+  private async hydrateCatalogItems(
+    routine: RoutineWithItems,
+  ): Promise<void> {
+    const pending = routine.items.filter(
+      (it) => !it.exerciseId && it.catalogId,
+    );
+    if (pending.length === 0) return;
+    const stmts: any[] = [];
+    for (const it of pending) {
+      const catalogId = it.catalogId!;
+      const catalogRes = await this.db.execute({
+        sql: 'SELECT * FROM exercise_catalog WHERE id = ?',
+        args: [catalogId],
+      });
+      const catalogRow = catalogRes.rows[0];
+      if (!catalogRow) continue; // El catálogo puede haber sido eliminado.
+      const newExerciseId = uuid();
+      stmts.push({
+        sql: `INSERT INTO exercises
+              (id, user_id, name, type, sets, duration_per_set_sec,
+               reps_per_set, rest_sec, notes, source)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ai_import')`,
+        args: [
+          newExerciseId,
+          routine.userId,
+          String(catalogRow.name),
+          String(catalogRow.type),
+          Number(catalogRow.sets),
+          catalogRow.duration_per_set_sec == null
+            ? null
+            : Number(catalogRow.duration_per_set_sec),
+          catalogRow.reps_per_set == null
+            ? null
+            : Number(catalogRow.reps_per_set),
+          Number(catalogRow.rest_sec),
+          catalogRow.notes == null ? null : String(catalogRow.notes),
+        ],
+      });
+      stmts.push({
+        sql: `UPDATE routine_items
+              SET exercise_id = ?
+              WHERE id = ? AND exercise_id IS NULL`,
+        args: [newExerciseId, it.id],
+      });
+    }
+    if (stmts.length > 0) {
+      await this.db.batch(stmts, 'write');
+    }
   }
 
   async deactivate(
