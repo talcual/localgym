@@ -67,6 +67,17 @@ export interface RoutineItemInput {
   durationPerSetSec?: number;
   restSec?: number;
   notes?: string;
+  /**
+   * Nombre del ejercicio (catálogo o propio del cliente). NO se envía al
+   * backend — sólo se usa para mostrar el nombre en el editor mientras el
+   * instructor edita la rutina, en lugar del UUID.
+   */
+  _exerciseName?: string;
+  /**
+   * Fuente del ejercicio: catálogo público o ejercicio del cliente. Tampoco
+   * se envía al backend; sólo UI.
+   */
+  _exerciseSource?: 'catalog' | 'client';
 }
 
 export interface CreateRoutineInput {

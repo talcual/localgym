@@ -201,8 +201,9 @@ function NewRoutineModal({
       );
       return;
     }
-    const cleanItems = items.filter((it) => it.exerciseId || it.catalogId);
-    // Recalcular daysPerWeek a partir de los días presentes.
+    const cleanItems = items
+      .filter((it) => it.exerciseId || it.catalogId)
+      .map(({ _exerciseName, _exerciseSource, ...rest }) => rest);
     const realDays = Math.max(daysPerWeek, new Set(cleanItems.map((i) => i.dayIndex)).size + 1);
     setBusy(true);
     setError(null);
@@ -319,10 +320,15 @@ function NewRoutineModal({
 
           <div>
             <p className="mb-2 text-xs text-slate-400">
-              Añade ejercicios por día usando el buscador del catálogo. Ajusta
-              series, repeticiones, duración y descanso directamente.
+              Añade ejercicios por día desde el catálogo, desde la cuenta del
+              cliente, o crea uno nuevo. Ajusta series, repeticiones, duración
+              y descanso directamente.
             </p>
-            <RoutineItemsEditor items={items} onChange={setItems} />
+            <RoutineItemsEditor
+              items={items}
+              onChange={setItems}
+              clientId={clientId}
+            />
           </div>
 
           {error && (

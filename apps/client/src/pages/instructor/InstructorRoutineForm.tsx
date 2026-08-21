@@ -49,9 +49,9 @@ export function InstructorRoutineForm() {
       setError('La rutina debe tener al menos 3 ejercicios');
       return;
     }
-    // Si el usuario borró ejercicios pero dejó días vacíos, los limpiamos
-    // para evitar enviar días sin items.
-    const clean = items.filter((it) => it.exerciseId || it.catalogId);
+    const clean = items
+      .filter((it) => it.exerciseId || it.catalogId)
+      .map(({ _exerciseName, _exerciseSource, ...rest }) => rest);
     setBusy(true);
     try {
       await routinesApi.replaceItems(routine.id, clean);
@@ -83,7 +83,11 @@ export function InstructorRoutineForm() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-300">
           Ejercicios
         </h2>
-        <RoutineItemsEditor items={items} onChange={setItems} />
+        <RoutineItemsEditor
+          items={items}
+          onChange={setItems}
+          clientId={routine.userId}
+        />
         {error && (
           <div className="mt-3 rounded-lg border border-rose-900/50 bg-rose-950/30 p-3 text-sm text-rose-200">
             {error}
