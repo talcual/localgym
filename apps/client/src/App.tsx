@@ -1,4 +1,5 @@
 import { Route, Routes, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { RoleRoute } from './components/RoleRoute';
 import { Navbar } from './components/Navbar';
@@ -52,7 +53,8 @@ export function App() {
     );
   }
   return (
-    <Routes>
+    <>
+      <Routes>
       <Route path="/" element={<Home />} />
       <Route
         path="/login"
@@ -304,5 +306,7 @@ export function App() {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+      <Analytics />
+    </>
   );
 }
